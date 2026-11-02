@@ -1,0 +1,56 @@
+import json
+import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from library_store import add_file
+from llm_tag_match import approved_tag_groups, match_one_tag
+
+
+SAMPLES = Path(__file__).parent / "samples"
+
+
+class FakeEmbedder:
+    def encode(self, texts, normalize_embeddings=False):
+        return [[1.0, 0.0] if "prototype" in text.lower() else [0.0, 1.0] for text in texts]
+
+
+class LLMTagTests(unittest.TestCase):
+    def test_only_approved_chunks_group_under_tag(self):
+        chunks = [
+            {"id": "a", "file": "a.docx", "text": "First text", "labels": {"topics": ["Scope"]}, "requirement_tier": "approved"},
+            {"id": "b", "file": "a.docx", "text": "Second text", "labels": {"topics": ["Scope"]}, "requirement_tier": "approved"},
+            {"id": "c", "file": "a.docx", "text": "Rejected", "labels": {"topics": ["Other"]}, "requirement_tier": "reject"},
+        ]
+        groups = approved_tag_groups(chunks)
+        self.assertEqual(len(groups), 1)
+        self.assertIn("First text", groups[0]["full_text"])
+        self.assertIn("Second text", groups[0]["full_text"])
+        self.assertNotIn("Rejected", groups[0]["full_text"])
+
+    def test_model_file_ids_are_validated_and_text_kept(self):
+        chunk = {"id": "a", "file": "rfp.docx", "text": "The supplier must deliver a working prototype.",
+                 "pages": [], "section_path": [], "labels": {"topics": ["Prototype"]}, "requirement_tier": "approved",
+                 "blocks": [{"kind": "paragraph", "text": "The supplier must deliver a working prototype."}]}
+        with TemporaryDirectory() as folder:
+            db = Path(folder) / "library.sqlite3"
+            saved = add_file("sample.pdf", (SAMPLES / "sample.pdf").read_bytes(), "Shows a prototype.", db)
+
+            def requester(body):
+                self.assertFalse(body["store"])
+                self.assertEqual(body["text"]["format"]["type"], "json_schema")
+                answer = {"matches": [
+                    {"file_id": saved["id"], "verdict": "match", "reason": "Có prototype."},
+                    {"file_id": "invented", "verdict": "match", "reason": "Invalid ID."},
+                ]}
+                return {"status": "completed", "output": [{"content": [{"type": "output_text", "text": json.dumps(answer)}]}]}
+
+            result = match_one_tag([chunk], db_path=db, requester=requester, embedder=FakeEmbedder())
+            self.assertEqual(result["tag"], "Prototype")
+            self.assertIn("must deliver", result["full_text"])
+            self.assertEqual([item["file_id"] for item in result["suggestions"]], [saved["id"]])
+            self.assertEqual(result["comparison"]["counts"]["matched"], 1)
+
+
+if __name__ == "__main__":
+    unittest.main()
