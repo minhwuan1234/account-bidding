@@ -13,7 +13,7 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Chọn một hoặc nhiều PDF/DOCX rồi bấm **Phân tích**. Trong một lần chạy, ứng dụng **chia chunk, suy ra chủ đề và xếp tag vào approved, considerable và reject**. Tag Approved tự đi tiếp để gợi ý file; bấm **Xem tag** nếu muốn xem ba nhóm và nội dung chunk. Khi gợi ý hoàn tất, ứng dụng hiện **bản tổng hợp ngay trên màn hình chính** gồm phạm vi công việc, mốc thời gian, yêu cầu nộp và file đối chiếu. **Thư viện file** nằm ở tab riêng. Bạn chọn file muốn dùng rồi bấm **Xuất JSON**. Nhấn `Control+C` trong Terminal để dừng. Khi chạy local, ứng dụng chỉ lắng nghe `127.0.0.1`; bước gợi ý gửi text tag và mô tả Markdown tới OpenAI API.
+Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Chọn một hoặc nhiều PDF/DOCX rồi bấm **Phân tích**. Trong một lần chạy, ứng dụng **chia chunk, suy ra chủ đề và xếp tag vào approved và reject**. Tag Approved tự đi tiếp để gợi ý file; bấm **Xem tag** nếu muốn xem hai nhóm và nội dung chunk. Khi gợi ý hoàn tất, ứng dụng hiện **bản tổng hợp ngay trên màn hình chính** gồm phạm vi công việc, mốc thời gian, yêu cầu nộp và file đối chiếu. **Thư viện file** nằm ở tab riêng. Bạn chọn file muốn dùng rồi bấm **Xuất JSON**. Nhấn `Control+C` trong Terminal để dừng. Khi chạy local, ứng dụng chỉ lắng nghe `127.0.0.1`; bước gợi ý gửi text tag và mô tả Markdown tới OpenAI API.
 
 ### Semantic chunking
 
@@ -48,9 +48,8 @@ Giao diện chỉ hiện các nhóm tag; nội dung chunk xuất hiện trong kh
 
 Ứng dụng dùng embedding local để so **tên tag** với mô tả về yêu cầu và thông tin nền. Điểm 0–1 tính từ chênh lệch độ giống (`clamp(0.5 + margin / 0.12, 0, 1)`). Đây là điểm heuristic, không phải xác suất.
 
-- `approved`: từ `0.60` trở lên, tự đi tiếp.
-- `considerable`: từ `0.45` đến dưới `0.60`.
-- `reject`: dưới `0.45`.
+- `approved`: từ `0.50` trở lên, tự đi tiếp.
+- `reject`: dưới `0.50`.
 
 Không cần duyệt thủ công. Popup **Xem tag** chỉ để kiểm tra các tag và đoạn nguồn. Dữ liệu duyệt tag cũ trong SQLite được giữ nguyên nhưng không còn ảnh hưởng điểm chấm.
 
@@ -60,9 +59,9 @@ Trong **Thư viện file**, có thể chọn nhiều PDF/DOCX trong một lần 
 
 Sau khi có tag `approved` và file trong thư viện, ứng dụng **tự gợi ý file** sau khi phân tích hoặc lưu file mới trong tab thư viện. Ứng dụng gửi text của từng tag (tối đa 30.000 ký tự cho mỗi tag) và **một mô tả Markdown cho mỗi file** trong thư viện tới OpenAI API. Model trả danh sách file có thể liên quan kèm lý do. Mục **File gợi ý theo tag** nằm ở cuối màn hình chính và được thu gọn. Mở từng tag để xem text gốc, file gợi ý và đánh dấu file muốn giữ. Trong mục **Thêm file khác** của mỗi tag, bạn có thể chọn một file khác đã có trong thư viện hoặc tải thêm PDF/DOCX. File tải thêm được lưu vào thư viện, tự tạo mô tả Markdown và được chọn cho tag đó.
 
-Khi tạo bản tổng hợp, ứng dụng gọi model thêm một lượt để **đọc lại các đoạn `considerable`**. Model chọn tối đa 12 thông tin bổ sung có dẫn nguồn về phạm vi, thời gian, bối cảnh hoặc điểm cần làm rõ. Bản tổng hợp chỉ nhận các đoạn `considerable` được chọn; đoạn `reject` bị loại khỏi đầu vào. Thông tin bổ sung nằm trong mục thu gọn và có thể được dùng để làm rõ phần tổng quan, phạm vi và mốc thời gian. **Yêu cầu hồ sơ và gợi ý file vẫn chỉ lấy từ `approved`**. Danh sách yêu cầu hiển thị tên, trạng thái và file liên quan; mở từng mục để xem mô tả, nguồn và chỉnh file. Nếu lượt đọc lại lỗi, bản tổng hợp vẫn chạy với các đoạn `approved` và báo phần bổ sung chưa hoàn tất. Lượt gọi model thêm được tính vào thời gian và chi phí ước tính.
+Bản tổng hợp và gợi ý file chỉ dùng các đoạn `approved`; các đoạn `reject` không đi tiếp. Danh sách yêu cầu hiển thị tên, trạng thái và file liên quan; mở từng mục để xem mô tả, nguồn và chỉnh file.
 
-Để bật gợi ý trên máy cá nhân, mở `local_api_key.py` và dán key vào dòng `OPEN_AI_API_KEY = "..."`, sau đó tải lại trang. Nếu cài từ Git hoặc ZIP và chưa có file này, sao chép `local_api_key.example.py` thành `local_api_key.py` trước. File chứa key được Git bỏ qua và không nằm trong bản ZIP. Bạn cũng có thể đặt biến môi trường `OPEN_AI_API_KEY` trước khi chạy ứng dụng (tên `OPENAI_API_KEY` cũng được hỗ trợ); biến môi trường được ưu tiên. Key không xuất hiện trong giao diện, database hoặc JSON. Có thể đổi model bằng `OPENAI_MODEL` (mặc định `gpt-6-luna`). Các lượt gọi model gửi văn bản các đoạn tài liệu và mô tả Markdown, không gửi file nhị phân. Mỗi tag được gợi ý riêng; bản tổng hợp còn có một lượt đọc `considerable` khi có đoạn thuộc nhóm này, nên thời gian và chi phí phụ thuộc số tag và độ dài tài liệu.
+Để bật gợi ý trên máy cá nhân, mở `local_api_key.py` và dán key vào dòng `OPEN_AI_API_KEY = "..."`, sau đó tải lại trang. Nếu cài từ Git hoặc ZIP và chưa có file này, sao chép `local_api_key.example.py` thành `local_api_key.py` trước. File chứa key được Git bỏ qua và không nằm trong bản ZIP. Bạn cũng có thể đặt biến môi trường `OPEN_AI_API_KEY` trước khi chạy ứng dụng (tên `OPENAI_API_KEY` cũng được hỗ trợ); biến môi trường được ưu tiên. Key không xuất hiện trong giao diện, database hoặc JSON. Có thể đổi model bằng `OPENAI_MODEL` (mặc định `gpt-6-luna`). Các lượt gọi model gửi văn bản các đoạn tài liệu và mô tả Markdown, không gửi file nhị phân. Mỗi tag được gợi ý riêng; thời gian và chi phí phụ thuộc số tag và độ dài tài liệu.
 
 Gợi ý chỉ dựa trên mô tả file; nó chưa xác nhận file đáp ứng yêu cầu. Bản tổng hợp trên màn hình chính dùng LLM để tổng hợp phạm vi, thời hạn và yêu cầu từ chunk Approved, liên kết từng yêu cầu với file có thể phù hợp. Bạn có thể chọn/bỏ file, tải thêm file và chỉnh trạng thái từng yêu cầu. Các lựa chọn ở bản tổng hợp được giữ trong phiên trình duyệt và trong JSON xuất ra; thư viện file và mô tả Markdown được lưu ở SQLite.
 

@@ -17,15 +17,12 @@ NEGATIVE = [
     "A document title, introduction, general overview or narrative description.",
     "A courtesy message or administrative information without an obligation.",
 ]
-APPROVED_MIN = 0.60
-CONSIDERABLE_MIN = 0.45
+APPROVED_MIN = 0.50
 
 
 def tier_for(score: float) -> str:
     if score >= APPROVED_MIN:
         return "approved"
-    if score >= CONSIDERABLE_MIN:
-        return "considerable"
     return "reject"
 
 

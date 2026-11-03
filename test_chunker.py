@@ -20,9 +20,8 @@ class NullEmbedder:
 
 class ChunkerTests(unittest.TestCase):
     def test_requirement_tier_boundaries(self):
-        self.assertEqual(tier_for(0.4499), "reject")
-        self.assertEqual(tier_for(0.45), "considerable")
-        self.assertEqual(tier_for(0.5999), "considerable")
+        self.assertEqual(tier_for(0.4999), "reject")
+        self.assertEqual(tier_for(0.50), "approved")
         self.assertEqual(tier_for(0.60), "approved")
 
     def test_docx_structure_and_table(self):
