@@ -30,7 +30,7 @@ REPORT_SCHEMA = _object({
     "submission": {"type": "string"},
     "requirements": {"type": "array", "items": _object({
         "title": {"type": "string"}, "detail": {"type": "string"},
-        "category": {"type": "string", "enum": ["Giấy tờ", "Kỹ thuật", "Tài chính", "Khác"]},
+        "category": {"type": "string", "enum": ["Giấy tờ", "Kỹ thuật", "Tài chính"]},
         "tag": {"type": "string"},
         "source_chunk_ids": {"type": "array", "items": {"type": "string"}},
         "file_ids": {"type": "array", "items": {"type": "string"}},
@@ -51,7 +51,10 @@ INSTRUCTIONS = (
     "the project (not the proposal submission deadline). If absent, return an empty detail and empty "
     "source_chunk_ids. Cite the source_chunk_ids for every nonempty project fact. "
     "Extract submission requirements only from chunks "
-    "whose requirement_tier is approved. Include concrete deliverables, deadlines, and documents to submit. "
+    "whose requirement_tier is approved. In requirements, include only distinct documents or files the "
+    "bidder must submit, grouped as Giấy tờ, Kỹ thuật, or Tài chính. Do not create a Khác group. "
+    "Leave out general contract terms, bid validity, language rules, and other instructions that do not "
+    "ask for a separate submission document. Put relevant deadlines in the timeline specialist instead. "
     "Every nonempty project fact and requirement must cite "
     "one or more source_chunk_ids from the input. For each requirement, use an existing approved tag and only "
     "file_ids from the supplied library that are plausibly relevant based on their descriptions. Use selected "
@@ -300,7 +303,8 @@ def generate_report(documents: list[dict[str, Any]], matches: list[dict[str, Any
             report["deadlines"].append({"label": label, "value": value,
                                         "note": str(item.get("note", "")).strip(), "source_chunk_ids": cited})
     report["requirements"] = [item for item in report.get("requirements", [])
-                              if isinstance(item, dict) and item.get("tag") in tags
+                              if isinstance(item, dict) and item.get("category") in ("Giấy tờ", "Kỹ thuật", "Tài chính")
+                              and item.get("tag") in tags
                               and any(value in approved for value in item.get("source_chunk_ids", []))]
     for item in report["requirements"]:
         item["source_chunk_ids"] = [value for value in item["source_chunk_ids"] if value in approved]
