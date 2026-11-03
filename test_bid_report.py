@@ -39,7 +39,6 @@ class BidReportTests(unittest.TestCase):
                         {"title": "Invented", "detail": "Không có nguồn", "category": "Khác",
                          "tag": "Company portfolio", "source_chunk_ids": ["rejected"], "file_ids": [], "reason": ""},
                     ],
-                    "questions": [],
                 }
                 return {"status": "completed", "model": "gpt-6-luna",
                         "usage": {"input_tokens": 1000, "output_tokens": 200},

@@ -36,22 +36,21 @@ REPORT_SCHEMA = _object({
         "file_ids": {"type": "array", "items": {"type": "string"}},
         "reason": {"type": "string"},
     })},
-    "questions": {"type": "array", "items": {"type": "string"}},
 })
 
 
 INSTRUCTIONS = (
     "Create a concise Vietnamese bid brief from the supplied document chunks, tag-level file suggestions, "
     "and Markdown descriptions of library files. Follow the sections in the JSON schema. "
-    "Write all narrative headings, summaries, requirement details, and questions in Vietnamese. "
+    "Write all narrative headings, summaries, and requirement details in Vietnamese. "
     "Keep only decision-relevant information: overview at most two short sentences; each scope detail at most "
     "two short sentences; each requirement detail one short sentence. Avoid repeating the same fact across sections. "
     "Summarize the project and scope from approved chunks in up to four short scope sections. "
     "Put concrete services or deliverables in scope_table as rows when the source supports them. "
     "Put stated evaluation criteria in evaluation_criteria, otherwise return an empty list. "
     "Extract submission requirements only from chunks "
-    "whose requirement_tier is approved. Include concrete deliverables, deadlines, documents to submit, and "
-    "ambiguities worth asking the buyer about when the source supports them. Keep dates exactly as stated in "
+    "whose requirement_tier is approved. Include concrete deliverables, deadlines, and documents to submit. "
+    "Keep dates exactly as stated in "
     "the source; do not invent a time zone conversion. Every scope item, deadline, and requirement must cite "
     "one or more source_chunk_ids from the input. For each requirement, use an existing approved tag and only "
     "file_ids from the supplied library that are plausibly relevant based on their descriptions. Use selected "
