@@ -28,7 +28,6 @@ REPORT_SCHEMA = _object({
     "project_facts": _object({key: _object({"detail": {"type": "string"}, "source_chunk_ids": {"type": "array", "items": {"type": "string"}}})
                              for key in ("audience", "project_deadline")}),
     "submission": {"type": "string"},
-    "deadlines": {"type": "array", "items": _object({"label": {"type": "string"}, "value": {"type": "string"}, "note": {"type": "string"}, "source_chunk_ids": {"type": "array", "items": {"type": "string"}}})},
     "requirements": {"type": "array", "items": _object({
         "title": {"type": "string"}, "detail": {"type": "string"},
         "category": {"type": "string", "enum": ["Giấy tờ", "Kỹ thuật", "Tài chính", "Khác"]},
@@ -46,15 +45,14 @@ INSTRUCTIONS = (
     "Write all narrative headings, summaries, and requirement details in Vietnamese. "
     "Keep only decision-relevant information: overview at most two short sentences; each requirement detail "
     "one short sentence. Avoid repeating the same fact across sections. "
-    "Scope of work, bid submission method, evaluation rules, and vendor workload are extracted by six "
-    "separate specialist requests. Do not add these fields to this response. "
+    "Scope of work, bid submission method, evaluation rules, vendor workload, and timeline milestones "
+    "are extracted by separate specialist requests. Do not add these fields to this response. "
     "For project_facts, extract the intended viewers, learners, or users and the deadline to finish "
     "the project (not the proposal submission deadline). If absent, return an empty detail and empty "
     "source_chunk_ids. Cite the source_chunk_ids for every nonempty project fact. "
     "Extract submission requirements only from chunks "
     "whose requirement_tier is approved. Include concrete deliverables, deadlines, and documents to submit. "
-    "Keep dates exactly as stated in "
-    "the source; do not invent a time zone conversion. Every nonempty project fact, deadline, and requirement must cite "
+    "Every nonempty project fact and requirement must cite "
     "one or more source_chunk_ids from the input. For each requirement, use an existing approved tag and only "
     "file_ids from the supplied library that are plausibly relevant based on their descriptions. Use selected "
     "file IDs as a strong user preference; file suggestions are weaker evidence. A file description is not proof "
@@ -82,6 +80,12 @@ EVALUATION_SCHEMA = _object({
 WORK_SCHEMA = _object({"items": {"type": "array", "items": _object({
     "item": {"type": "string"}, "quantity": {"type": "string"},
     "detail": {"type": "string"},
+    "source_chunk_ids": {"type": "array", "items": {"type": "string"}},
+})}})
+
+TIMELINE_SCHEMA = _object({"deadlines": {"type": "array", "items": _object({
+    "label": {"type": "string"}, "value": {"type": "string"},
+    "note": {"type": "string"},
     "source_chunk_ids": {"type": "array", "items": {"type": "string"}},
 })}})
 
@@ -139,6 +143,24 @@ def build_sow_request(field: str, source_chunks: list[dict[str, Any]]) -> dict[s
         "input": json.dumps({"source_chunks": source_chunks}, ensure_ascii=False),
         "text": {"format": {"type": "json_schema", "name": "sow_" + field,
                             "strict": True, "schema": SOW_SCHEMAS[field]}},
+    }
+
+
+def build_timeline_request(source_chunks: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "model": "gpt-6-luna", "store": False,
+        "instructions": (
+            SOW_COMMON +
+            "Tìm mọi mốc quan trọng của hồ sơ thầu và dự án: hạn nộp, hạn gửi câu hỏi, họp tiền thầu, "
+            "hạn giao sản phẩm hoặc mốc khác được ghi rõ. Mỗi mốc là một hàng với label ngắn, cụ thể. "
+            "Nếu nguồn ghi đủ ngày tháng năm, viết value theo DD/MM/YYYY và giữ nguyên giờ cùng múi giờ "
+            "đã nêu. Không tự đổi múi giờ, không bịa năm hoặc tính ngày từ một mốc tương đối. "
+            "Nếu chỉ có thời hạn tương đối, mô tả đúng như nguồn trong value. note chỉ giữ chỉ dẫn ngắn "
+            "liên quan đến mốc đó. Không có mốc thì trả deadlines rỗng."
+        ),
+        "input": json.dumps({"source_chunks": source_chunks}, ensure_ascii=False),
+        "text": {"format": {"type": "json_schema", "name": "timeline_milestones",
+                            "strict": True, "schema": TIMELINE_SCHEMA}},
     }
 
 
@@ -208,7 +230,8 @@ def generate_report(documents: list[dict[str, Any]], matches: list[dict[str, Any
     files = list_files(db_path)
     request, report_truncated = build_request(chunks, matches, files)
     sow_source, sow_truncated = _source_chunks(chunks)
-    requests = {"bid_brief": request, **{field: build_sow_request(field, sow_source) for field in SOW_PROMPTS}}
+    requests = {"bid_brief": request, **{field: build_sow_request(field, sow_source) for field in SOW_PROMPTS},
+                "timeline_milestones": build_timeline_request(sow_source)}
     with ThreadPoolExecutor(max_workers=len(requests)) as pool:
         futures = {name: pool.submit(requester, payload) for name, payload in requests.items()}
         responses = {name: future.result() for name, future in futures.items()}
@@ -265,11 +288,16 @@ def generate_report(documents: list[dict[str, Any]], matches: list[dict[str, Any
         cited = [value for value in item.get("source_chunk_ids", []) if value in report_source_ids]
         detail = str(item.get("detail", "")).strip() if cited else ""
         report["project_facts"][key] = {"detail": detail, "source_chunk_ids": cited if detail else []}
-    for section in ("deadlines",):
-        report[section] = [item for item in report.get(section, [])
-                           if isinstance(item, dict) and any(value in report_source_ids for value in item.get("source_chunk_ids", []))]
-        for item in report[section]:
-            item["source_chunk_ids"] = [value for value in item["source_chunk_ids"] if value in report_source_ids]
+    timeline = _response_json(responses["timeline_milestones"], "các mốc thời gian")
+    report["deadlines"] = []
+    for item in timeline.get("deadlines", []):
+        if not isinstance(item, dict):
+            continue
+        cited = [value for value in item.get("source_chunk_ids", []) if value in sow_source_ids]
+        label, value = str(item.get("label", "")).strip(), str(item.get("value", "")).strip()
+        if label and value and cited:
+            report["deadlines"].append({"label": label, "value": value,
+                                        "note": str(item.get("note", "")).strip(), "source_chunk_ids": cited})
     report["requirements"] = [item for item in report.get("requirements", [])
                               if isinstance(item, dict) and item.get("tag") in tags
                               and any(value in approved for value in item.get("source_chunk_ids", []))]

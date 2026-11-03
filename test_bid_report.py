@@ -20,14 +20,17 @@ def model_response(answer):
 class BidReportTests(unittest.TestCase):
     def test_no_clarification_questions_when_all_five_facts_have_sources(self):
         documents = [{"file": "rfq.docx", "chunks": [{"id": "scope", "file": "rfq.docx",
-            "text": "The project serves teachers. Deliver by June 1. Email the bid. Produce 1 video.",
+            "text": "The project serves teachers. Deliver by June 1, 2026. Email the bid. Produce 1 video.",
             "labels": {"topics": ["Video"]}, "requirement_tier": "approved"}]}]
 
-        barrier = threading.Barrier(7)
+        barrier = threading.Barrier(8)
 
         def requester(request):
             barrier.wait(timeout=5)
             name = request["text"]["format"]["name"]
+            if name == "timeline_milestones":
+                return model_response({"deadlines": [{"label": "Hạn giao sản phẩm", "value": "01/06/2026",
+                    "note": "", "source_chunk_ids": ["scope"]}]})
             if name != "bid_brief":
                 self.assertEqual(request["model"], "gpt-6-luna")
                 if name == "sow_work_details":
@@ -42,14 +45,15 @@ class BidReportTests(unittest.TestCase):
                 "project_facts": {
                     "audience": {"detail": "Giáo viên.", "source_chunk_ids": ["scope"]},
                     "project_deadline": {"detail": "1/6.", "source_chunk_ids": ["scope"]}},
-                "submission": "", "deadlines": [], "requirements": []}
+                "submission": "", "requirements": []}
             return model_response(answer)
 
         with TemporaryDirectory() as folder:
             report = generate_report(documents, [], db_path=Path(folder) / "library.sqlite3", requester=requester)
         self.assertEqual(report["clarification_questions"], [])
         self.assertEqual(report["scope_table"][0]["quantity"], "1 video")
-        self.assertEqual(len(report["usage_events"]), 7)
+        self.assertEqual(report["deadlines"][0]["value"], "01/06/2026")
+        self.assertEqual(len(report["usage_events"]), 8)
 
     def test_report_uses_only_approved_sources_and_existing_files(self):
         with TemporaryDirectory() as folder:
@@ -68,6 +72,13 @@ class BidReportTests(unittest.TestCase):
                 calls.append(name)
                 self.assertFalse(request["store"])
                 payload = json.loads(request["input"])
+                if name == "timeline_milestones":
+                    self.assertEqual([chunk["id"] for chunk in payload["source_chunks"]], ["req", "rejected"])
+                    return model_response({"deadlines": [
+                        {"label": "Hạn nộp", "value": "22/10/2026", "note": "",
+                         "source_chunk_ids": ["rejected"]},
+                        {"label": "Bịa", "value": "01/01/2030", "note": "",
+                         "source_chunk_ids": ["invented"]}]})
                 if name != "bid_brief":
                     self.assertEqual([chunk["id"] for chunk in payload["source_chunks"]], ["req", "rejected"])
                     if name == "sow_work_details":
@@ -88,7 +99,7 @@ class BidReportTests(unittest.TestCase):
                         "audience": {"detail": "Nhà tuyển chọn.", "source_chunk_ids": ["req"]},
                         "project_deadline": {"detail": "Ngày mai.", "source_chunk_ids": ["rejected"]},
                     },
-                    "submission": "Nộp portfolio.", "deadlines": [],
+                    "submission": "Nộp portfolio.",
                     "requirements": [
                         {"title": "Company portfolio", "detail": "Nộp portfolio", "category": "Giấy tờ",
                          "tag": "Company portfolio", "source_chunk_ids": ["req"],
@@ -102,7 +113,7 @@ class BidReportTests(unittest.TestCase):
             report = generate_report(documents, [], db_path=db, requester=requester)
             self.assertEqual(set(calls), {"bid_brief", "sow_objective", "sow_arrangement",
                                           "sow_content_provider", "sow_bid_submission_method",
-                                          "sow_evaluation_method", "sow_work_details"})
+                                          "sow_evaluation_method", "sow_work_details", "timeline_milestones"})
             self.assertEqual(len(report["requirements"]), 1)
             self.assertEqual(report["requirements"][0]["file_ids"], [saved["id"]])
             self.assertEqual(report["requirements"][0]["status"], "review")
@@ -110,6 +121,7 @@ class BidReportTests(unittest.TestCase):
             self.assertEqual(report["scope"]["content_provider"], {"detail": "", "source_chunk_ids": []})
             self.assertEqual(report["evaluation_method"]["criteria"], [{"name": "Kinh nghiệm", "weight": "40%",
                 "detail": "", "source_chunk_ids": ["rejected"]}])
+            self.assertEqual([item["label"] for item in report["deadlines"]], ["Hạn nộp"])
             self.assertEqual(report["project_facts"]["audience"]["detail"], "Nhà tuyển chọn.")
             self.assertEqual(report["project_facts"]["project_deadline"], {"detail": "", "source_chunk_ids": []})
             self.assertEqual(report["clarification_questions"], [
@@ -118,7 +130,7 @@ class BidReportTests(unittest.TestCase):
                 "Phạm vi công việc cụ thể gồm những hạng mục và sản phẩm bàn giao nào?",
             ])
             self.assertEqual(report["source_files"], ["rfq.docx"])
-            self.assertEqual(len(report["usage_events"]), 7)
+            self.assertEqual(len(report["usage_events"]), 8)
             self.assertAlmostEqual(report["usage"]["estimated_cost_usd"], 0.0002)
 
 

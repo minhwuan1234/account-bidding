@@ -17,6 +17,8 @@ Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Thả một hoặc nhiều 
 
 Phần **Phạm vi công việc** luôn có sáu mục: mục tiêu chính của project, hình thức hợp đồng, bên cung cấp nội dung chuyên môn, hình thức nộp thầu, cách chấm điểm và đánh giá hồ sơ, và chi tiết cùng khối lượng công việc. Mỗi mục dùng một lượt đọc `gpt-6-luna` riêng; sáu lượt chạy đồng thời và chỉ lấy thông tin từ các đoạn tài liệu đầu vào. Mục không có bằng chứng sẽ hiện “Hồ sơ không nêu rõ.” Khối lượng và tỷ trọng điểm không được tự suy đoán.
 
+Phần **Các mốc** có một lượt đọc `gpt-6-luna` riêng chạy cùng lúc với các mục trên. Mốc có ngày đầy đủ được trình bày theo ngày/tháng/năm, giữ nguyên giờ và múi giờ trong tài liệu; thẻ trạng thái cho biết đã qua, hôm nay hay sắp tới. Mốc chỉ ghi thời hạn tương đối sẽ không bị gán một ngày tự suy đoán.
+
 Cuối bản tổng hợp, **Câu hỏi nháp** hiện dưới dạng gạch đầu dòng khi thiếu bằng chứng về mục tiêu dự án, đối tượng xem/học/sử dụng, deadline hoàn thành dự án, cách nộp thầu hoặc phạm vi công việc. Mục đã có thông tin sẽ không sinh câu hỏi.
 
 ### Semantic chunking
