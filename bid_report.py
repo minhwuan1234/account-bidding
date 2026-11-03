@@ -23,7 +23,8 @@ REPORT_SCHEMA = _object({
     "buyer": {"type": "string"},
     "source_language": {"type": "string"},
     "overview": {"type": "string"},
-    "scope": {"type": "array", "items": _object({"heading": {"type": "string"}, "detail": {"type": "string"}, "source_chunk_ids": {"type": "array", "items": {"type": "string"}}})},
+    "scope": _object({key: _object({"detail": {"type": "string"}, "source_chunk_ids": {"type": "array", "items": {"type": "string"}}})
+                      for key in ("objective", "arrangement", "content_provider")}),
     "scope_table": {"type": "array", "items": _object({"item": {"type": "string"}, "detail": {"type": "string"}, "source_chunk_ids": {"type": "array", "items": {"type": "string"}}})},
     "submission": {"type": "string"},
     "evaluation_criteria": {"type": "array", "items": {"type": "string"}},
@@ -43,15 +44,18 @@ INSTRUCTIONS = (
     "Create a concise Vietnamese bid brief from the supplied document chunks, tag-level file suggestions, "
     "and Markdown descriptions of library files. Follow the sections in the JSON schema. "
     "Write all narrative headings, summaries, and requirement details in Vietnamese. "
-    "Keep only decision-relevant information: overview at most two short sentences; each scope detail at most "
-    "two short sentences; each requirement detail one short sentence. Avoid repeating the same fact across sections. "
-    "Summarize the project and scope from approved chunks in up to four short scope sections. "
-    "Put concrete services or deliverables in scope_table as rows when the source supports them. "
+    "Keep only decision-relevant information: overview at most two short sentences; each requirement detail "
+    "one short sentence. Avoid repeating the same fact across sections. "
+    "Use the three fixed scope fields: objective for the project's main purpose, arrangement for the contract "
+    "or procurement form, and content_provider for who supplies the subject-matter content. Summarize each "
+    "field from explicit source evidence. If the source does not state it, return an empty detail and empty "
+    "source_chunk_ids. Do not infer a content provider from creative approval or brand guidance. "
+    "Put specific vendor tasks and deliverables in scope_table as rows; return an empty array if none are stated. "
     "Put stated evaluation criteria in evaluation_criteria, otherwise return an empty list. "
     "Extract submission requirements only from chunks "
     "whose requirement_tier is approved. Include concrete deliverables, deadlines, and documents to submit. "
     "Keep dates exactly as stated in "
-    "the source; do not invent a time zone conversion. Every scope item, deadline, and requirement must cite "
+    "the source; do not invent a time zone conversion. Every nonempty scope field, vendor task, deadline, and requirement must cite "
     "one or more source_chunk_ids from the input. For each requirement, use an existing approved tag and only "
     "file_ids from the supplied library that are plausibly relevant based on their descriptions. Use selected "
     "file IDs as a strong user preference; file suggestions are weaker evidence. A file description is not proof "
@@ -115,7 +119,16 @@ def generate_report(documents: list[dict[str, Any]], matches: list[dict[str, Any
     source_ids = {chunk.get("id") for chunk in request_input["source_chunks"]}
     file_ids = {file["id"] for file in files}
     tags = {next(iter(chunk.get("labels", {}).get("topics", [])), "") for chunk in approved.values()}
-    for section in ("scope", "scope_table", "deadlines"):
+    scope = report.get("scope") if isinstance(report.get("scope"), dict) else {}
+    report["scope"] = {}
+    for key in ("objective", "arrangement", "content_provider"):
+        item = scope.get(key)
+        if not isinstance(item, dict):
+            item = {}
+        cited = [value for value in item.get("source_chunk_ids", []) if value in source_ids]
+        detail = str(item.get("detail", "")).strip() if cited else ""
+        report["scope"][key] = {"detail": detail, "source_chunk_ids": cited if detail else []}
+    for section in ("scope_table", "deadlines"):
         report[section] = [item for item in report.get(section, [])
                            if isinstance(item, dict) and any(value in source_ids for value in item.get("source_chunk_ids", []))]
         for item in report[section]:

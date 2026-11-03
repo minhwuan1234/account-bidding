@@ -15,6 +15,8 @@ python app.py
 
 Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Thả một hoặc nhiều PDF/DOCX vào ô đầu trang hoặc bấm vào ô để chọn; phân tích bắt đầu tự động. Trong một lần chạy, ứng dụng **chia chunk, suy ra chủ đề và xếp tag vào approved và reject**. Tag Approved tự đi tiếp để gợi ý file. Trong lúc chờ, giao diện hiện một dòng tên các file đang được phân tích; khi hoàn tất, ứng dụng hiện **bản tổng hợp ngay trên màn hình chính** gồm phạm vi công việc, mốc thời gian, yêu cầu nộp và file đối chiếu. **Thư viện file** nằm ở tab riêng. Nhấn `Control+C` trong Terminal để dừng. Khi chạy local, ứng dụng chỉ lắng nghe `127.0.0.1`; bước gợi ý gửi text tag và mô tả Markdown tới OpenAI API.
 
+Phần **Phạm vi công việc** luôn có bốn mục: mục tiêu chính của project, hình thức, bên cung cấp nội dung chuyên môn và việc vendor phải làm. Mục nào không có bằng chứng trong tài liệu sẽ hiện “Hồ sơ không nêu rõ.”
+
 ### Semantic chunking
 
 Chế độ **chia theo ngữ nghĩa trong từng mục** được bật mặc định với ngưỡng `0.85`. Tùy chọn này được ẩn khỏi giao diện. Mô hình mặc định là [`intfloat/multilingual-e5-small`](https://huggingface.co/intfloat/multilingual-e5-small), hỗ trợ nhiều ngôn ngữ. Lần dùng đầu tiên cần Internet để tải mô hình khoảng vài trăm MB vào bộ nhớ đệm của máy; sau đó việc chia ngữ nghĩa và suy ra chủ đề đều tính local. Bước chia ngữ nghĩa và suy ra chủ đề chạy trên máy; các lượt gợi ý file và tổng hợp gửi văn bản cần thiết tới OpenAI API.
