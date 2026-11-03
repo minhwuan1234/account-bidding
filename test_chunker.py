@@ -20,10 +20,10 @@ class NullEmbedder:
 
 class ChunkerTests(unittest.TestCase):
     def test_requirement_tier_boundaries(self):
-        self.assertEqual(tier_for(0.4999), "reject")
-        self.assertEqual(tier_for(0.5), "considerable")
-        self.assertEqual(tier_for(0.7499), "considerable")
-        self.assertEqual(tier_for(0.75), "approved")
+        self.assertEqual(tier_for(0.4499), "reject")
+        self.assertEqual(tier_for(0.45), "considerable")
+        self.assertEqual(tier_for(0.5999), "considerable")
+        self.assertEqual(tier_for(0.60), "approved")
 
     def test_docx_structure_and_table(self):
         result = chunk_file(SAMPLES / "sample.docx", embedder=NullEmbedder())
@@ -140,7 +140,7 @@ class ChunkerTests(unittest.TestCase):
         self.assertEqual(chunks[1]["labels"]["source"], "content_embedding")
         self.assertTrue(fake.normalized)
 
-    def test_requirement_tiers_use_tags_only_and_feedback(self):
+    def test_requirement_tiers_use_tag_scores_without_manual_feedback(self):
         from tag_store import save_approved
 
         class FakeEmbedder:
@@ -170,8 +170,8 @@ class ChunkerTests(unittest.TestCase):
             self.assertFalse(any("long" in text for text in fake.texts))
             save_approved("UNDP overview", [0.0, 1.0], db)
             mark_requirement_candidates(chunks, embedder=fake, db_path=db)
-            self.assertEqual(chunks[1]["requirement_tier"], "approved")
-            self.assertTrue(chunks[1]["approved_by_user"])
+            self.assertEqual(chunks[1]["requirement_tier"], "reject")
+            self.assertNotIn("approved_by_user", chunks[1])
 
 
 if __name__ == "__main__":

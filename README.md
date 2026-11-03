@@ -1,6 +1,6 @@
 # Structural Chunker (bản local)
 
-Ứng dụng Python chia PDF/DOCX theo cấu trúc tài liệu. Mỗi chunk gồm nội dung dưới **một tiêu đề gần nhất** cho đến tiêu đề kế tiếp, kèm đường dẫn mục, tên file và trang PDF. Bảng được giữ dưới dạng hàng/cột trong JSON. Chia tiếp theo ngữ nghĩa được bật mặc định; chủ đề của mỗi chunk được chọn từ chính nội dung chunk bằng embedding local. Sau đó ứng dụng chấm **tag chủ đề** và xếp chúng vào ba mức để quyết định tag nào đi tiếp. Không có giới hạn 500 token cho chunk. Phân tích và gợi ý chủ đề chạy local; chỉ bước gợi ý file bằng LLM mới gọi OpenAI API khi bạn chọn dùng và nhập API key.
+Ứng dụng Python chia PDF/DOCX theo cấu trúc tài liệu. Mỗi chunk gồm nội dung dưới **một tiêu đề gần nhất** cho đến tiêu đề kế tiếp, kèm đường dẫn mục, tên file và trang PDF. Bảng được giữ dưới dạng hàng/cột trong JSON. Chia tiếp theo ngữ nghĩa được bật mặc định; chủ đề của mỗi chunk được chọn từ chính nội dung chunk bằng embedding local. Sau đó ứng dụng chấm **tag chủ đề** và xếp chúng vào ba mức để quyết định tag nào đi tiếp. Không có giới hạn 500 token cho chunk. Phân tích và gợi ý chủ đề chạy local; bước gợi ý file và tạo bản tổng hợp dùng OpenAI API khi máy chủ có API key.
 
 ## Cài và chạy trên macOS
 
@@ -13,7 +13,7 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Chọn một hoặc nhiều PDF/DOCX rồi bấm **Phân tích**. Trong một lần chạy, ứng dụng **chia chunk, suy ra chủ đề và xếp tag vào approved, considerable và reject**. Popup **Duyệt tag** mở sau khi phân tích; đóng popup để ứng dụng tự gợi ý file cho các tag approved nếu thư viện đã có file và model đã kết nối. **Thư viện file** nằm ở tab riêng. Bạn chọn file muốn dùng rồi bấm **Xuất JSON**. Nhấn `Control+C` trong Terminal để dừng. Khi chạy local, ứng dụng chỉ lắng nghe `127.0.0.1`; bước gợi ý gửi text tag và mô tả Markdown tới OpenAI API.
+Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Chọn một hoặc nhiều PDF/DOCX rồi bấm **Phân tích**. Trong một lần chạy, ứng dụng **chia chunk, suy ra chủ đề và xếp tag vào approved, considerable và reject**. Tag Approved tự đi tiếp để gợi ý file; bấm **Xem tag** nếu muốn xem ba nhóm và nội dung chunk. Khi gợi ý hoàn tất, ứng dụng tạo **Bản tổng hợp** gồm phạm vi công việc, mốc thời gian, yêu cầu nộp và file đối chiếu. **Thư viện file** nằm ở tab riêng. Bạn chọn file muốn dùng rồi bấm **Xuất JSON**. Nhấn `Control+C` trong Terminal để dừng. Khi chạy local, ứng dụng chỉ lắng nghe `127.0.0.1`; bước gợi ý gửi text tag và mô tả Markdown tới OpenAI API.
 
 ### Semantic chunking
 
@@ -22,9 +22,9 @@ Chế độ **Chia theo ngữ nghĩa trong từng mục** được bật mặc �
 ## Thử nhanh
 
 1. Mở tab **Thư viện file**, thêm `samples/sample.pdf` (có thể chọn nhiều file cùng lúc). Ứng dụng tự tạo mô tả Markdown; mở mục **Mô tả Markdown** để xem hoặc sửa.
-2. Quay lại tab **Phân tích & gợi ý**, chọn `samples/sample.docx` và bấm **Phân tích** (cũng có thể chọn nhiều file đầu vào cùng lúc). Popup hiện ba nhóm tag; rê chuột vào tag để xem nội dung chunk, bấm tag để duyệt hoặc bỏ duyệt.
-3. Cấu hình `OPEN_AI_API_KEY` trên máy chủ rồi đóng popup. Gợi ý cho các tag `approved` sẽ chạy tự động. Xem text của từng tag, đánh dấu file muốn dùng, hoặc mở **Thêm file khác** để chọn file trong thư viện hay tải PDF/DOCX mới.
-4. Bấm **Xuất JSON** để lấy chunk, gợi ý và danh sách file bạn đã chọn. Chạy kiểm thử bằng `python -m unittest -v`.
+2. Quay lại tab **Phân tích & gợi ý**, chọn `samples/sample.docx` và bấm **Phân tích** (cũng có thể chọn nhiều file đầu vào cùng lúc). Bấm **Xem tag** để xem ba nhóm; rê chuột vào tag để xem nội dung chunk.
+3. Cấu hình `OPEN_AI_API_KEY` trên máy chủ. Gợi ý cho các tag `approved` sẽ chạy tự động. Xem text của từng tag, đánh dấu file muốn dùng, hoặc mở **Thêm file khác** để chọn file trong thư viện hay tải PDF/DOCX mới.
+4. Mở tab **Bản tổng hợp** để xem yêu cầu, chọn hoặc tải thêm file cho từng yêu cầu, chỉnh trạng thái và in hoặc lưu PDF. Bấm **Xuất JSON** để lấy toàn bộ kết quả. Chạy kiểm thử bằng `python -m unittest -v`.
 
 
 Để thấy sự khác biệt của chế độ semantic, chọn `samples/semantic_sample.docx`. Với ngưỡng `0.85`, ứng dụng tách phần thiết kế và phần thanh toán thành 2 chunk dù chúng nằm dưới cùng một tiêu đề.
@@ -44,31 +44,29 @@ Mỗi chunk có `labels.topics` với một chủ đề. Ứng dụng trích cá
 
 Giao diện chỉ hiện các nhóm tag; nội dung chunk xuất hiện trong khung xem trước khi rê chuột vào tag. Tên file, nội dung từng chunk, `section_path`, trang và các metadata gốc vẫn được giữ trong JSON.
 
-## Duyệt tag để chọn bước tiếp theo
+## Chọn tag để đi tiếp
 
-Ứng dụng dùng cùng embedding model local để so **tên tag** với mô tả về yêu cầu và mô tả về thông tin nền. Bước này không so embedding của cả chunk. Điểm 0–1 được tính từ chênh lệch độ giống (`clamp(0.5 + margin / 0.12, 0, 1)`) và có thể được nâng bởi các tag bạn đã duyệt trước đó. Đây là điểm heuristic, **không phải xác suất**.
+Ứng dụng dùng embedding local để so **tên tag** với mô tả về yêu cầu và thông tin nền. Điểm 0–1 tính từ chênh lệch độ giống (`clamp(0.5 + margin / 0.12, 0, 1)`). Đây là điểm heuristic, không phải xác suất.
 
-- `approved`: điểm từ `0.75` trở lên.
-- `considerable`: từ `0.50` đến dưới `0.75`.
-- `reject`: dưới `0.50`.
+- `approved`: từ `0.60` trở lên, tự đi tiếp.
+- `considerable`: từ `0.45` đến dưới `0.60`.
+- `reject`: dưới `0.45`.
 
-Chỉ tag `approved` xuất hiện trong `next_step_tags` để dùng cho bước sau. Cả ba nhóm vẫn hiện trên giao diện. Rê chuột vào tag để xem nội dung đoạn. Bấm tag để duyệt thủ công, chuyển nó lên `approved` và lưu tên cùng embedding tag trong SQLite local tại `data/tag_examples.sqlite3`. Bấm lần nữa để bỏ duyệt; tag trở về mức do máy chấm. Lần phân tích sau, embedding của tag mới được so với các tag mẫu bạn đã duyệt. Tag được máy xếp `approved` không tự lưu làm mẫu.
-
-Các ngưỡng trên đang dùng thử và có thể cần chỉnh sau khi xem dữ liệu thật.
+Không cần duyệt thủ công. Popup **Xem tag** chỉ để kiểm tra các tag và đoạn nguồn. Dữ liệu duyệt tag cũ trong SQLite được giữ nguyên nhưng không còn ảnh hưởng điểm chấm.
 
 ## Thư viện file và gợi ý theo tag
 
-Trong **Thư viện file**, có thể chọn nhiều PDF/DOCX trong một lần và bấm **Lưu file**; ứng dụng lưu từng file riêng. Ứng dụng lưu nguyên file trong cùng SQLite local với tag đã duyệt (`data/tag_examples.sqlite3`) và **tự tạo mô tả Markdown** từ tiêu đề, câu và hàng bảng đại diện trong file. Mô tả này mang tính trích lọc, không phải bản tóm tắt do LLM viết; có thể sửa trong mục **Mô tả Markdown** của từng file. File và mô tả vẫn có ở lần mở ứng dụng sau. Bản ZIP không chứa database cá nhân.
+Trong **Thư viện file**, có thể chọn nhiều PDF/DOCX trong một lần và bấm **Lưu file**; ứng dụng lưu từng file riêng. Ứng dụng lưu nguyên file trong SQLite local (`data/tag_examples.sqlite3`) và **tự tạo mô tả Markdown** từ tiêu đề, câu và hàng bảng đại diện trong file. Mô tả này mang tính trích lọc, không phải bản tóm tắt do LLM viết; có thể sửa trong mục **Mô tả Markdown** của từng file. File và mô tả vẫn có ở lần mở ứng dụng sau. Bản ZIP không chứa database cá nhân.
 
-Sau khi có tag `approved` và file trong thư viện, ứng dụng **tự gợi ý file** khi đóng popup duyệt tag hoặc lưu file mới trong tab thư viện. Ứng dụng gửi text của từng tag (tối đa 30.000 ký tự cho mỗi tag) và **một mô tả Markdown cho mỗi file** trong thư viện tới OpenAI API. Model trả danh sách file có thể liên quan kèm lý do. Giao diện hiển thị tên tag, toàn bộ text tag và các file được gợi ý; bạn đánh dấu file muốn giữ. Trong mục **Thêm file khác** của mỗi tag, bạn có thể chọn một file khác đã có trong thư viện hoặc tải thêm PDF/DOCX. File tải thêm được lưu vào thư viện, tự tạo mô tả Markdown và được chọn cho tag đó.
+Sau khi có tag `approved` và file trong thư viện, ứng dụng **tự gợi ý file** sau khi phân tích hoặc lưu file mới trong tab thư viện. Ứng dụng gửi text của từng tag (tối đa 30.000 ký tự cho mỗi tag) và **một mô tả Markdown cho mỗi file** trong thư viện tới OpenAI API. Model trả danh sách file có thể liên quan kèm lý do. Giao diện hiển thị tên tag, toàn bộ text tag và các file được gợi ý; bạn đánh dấu file muốn giữ. Trong mục **Thêm file khác** của mỗi tag, bạn có thể chọn một file khác đã có trong thư viện hoặc tải thêm PDF/DOCX. File tải thêm được lưu vào thư viện, tự tạo mô tả Markdown và được chọn cho tag đó.
 
 Để bật gợi ý trên máy cá nhân, mở `local_api_key.py` và dán key vào dòng `OPEN_AI_API_KEY = "..."`, sau đó tải lại trang. Nếu cài từ Git hoặc ZIP và chưa có file này, sao chép `local_api_key.example.py` thành `local_api_key.py` trước. File chứa key được Git bỏ qua và không nằm trong bản ZIP. Bạn cũng có thể đặt biến môi trường `OPEN_AI_API_KEY` trước khi chạy ứng dụng (tên `OPENAI_API_KEY` cũng được hỗ trợ); biến môi trường được ưu tiên. Key không xuất hiện trong giao diện, database hoặc JSON. Có thể đổi model bằng `OPENAI_MODEL` (mặc định `gpt-6-luna`). Cuộc gọi model chỉ gửi text tag và mô tả Markdown, không gửi file nhị phân. Mỗi tag được gọi riêng nên thời gian và chi phí phụ thuộc số tag `approved` và độ dài mô tả.
 
-Gợi ý chỉ dựa trên mô tả file; nó chưa xác nhận file đáp ứng yêu cầu. Các lựa chọn file được giữ trong phiên trình duyệt hiện tại và có trong JSON xuất ra; thư viện file và mô tả Markdown được lưu ở SQLite.
+Gợi ý chỉ dựa trên mô tả file; nó chưa xác nhận file đáp ứng yêu cầu. Tab **Bản tổng hợp** dùng LLM để tổng hợp phạm vi, thời hạn và yêu cầu từ chunk Approved, liên kết từng yêu cầu với file có thể phù hợp. Bạn có thể chọn/bỏ file, tải thêm file và chỉnh trạng thái từng yêu cầu. Các lựa chọn ở bản tổng hợp được giữ trong phiên trình duyệt và trong JSON xuất ra; thư viện file và mô tả Markdown được lưu ở SQLite.
 
 ## Dữ liệu xuất
 
-JSON có `schema_version: 9`, `documents` chứa toàn bộ chunk, `next_step_tags` chỉ chứa tag `approved`, và `file_suggestions` chứa gợi ý cùng `selected_file_ids` của từng tag nếu đã chạy. Mỗi chunk giữ `file`, `section_path`, `pages`, `blocks` cùng `labels.topics`. Các trường `requirement_model_score`, `requirement_model_tier` lưu điểm/mức máy chấm; `requirement_score`, `requirement_tier` là kết quả sau khi duyệt thủ công; `approved_by_user` phân biệt lựa chọn của bạn.
+JSON có `schema_version: 10`, `documents` chứa toàn bộ chunk, `next_step_tags` chỉ chứa tag `approved`, `file_suggestions` chứa gợi ý cùng file đã chọn theo tag, và `bid_report` chứa bản tổng hợp cùng các chỉnh sửa file/trạng thái của bạn. Mỗi chunk giữ `file`, `section_path`, `pages`, `blocks` và `labels.topics`. `requirement_score`/`requirement_tier` là điểm và mức được tính tự động.
 
 ## Giới hạn hiện tại
 
