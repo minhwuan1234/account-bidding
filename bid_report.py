@@ -25,6 +25,8 @@ REPORT_SCHEMA = _object({
     "overview": {"type": "string"},
     "scope": _object({key: _object({"detail": {"type": "string"}, "source_chunk_ids": {"type": "array", "items": {"type": "string"}}})
                       for key in ("objective", "arrangement", "content_provider")}),
+    "project_facts": _object({key: _object({"detail": {"type": "string"}, "source_chunk_ids": {"type": "array", "items": {"type": "string"}}})
+                             for key in ("audience", "project_deadline", "bid_submission_method")}),
     "scope_table": {"type": "array", "items": _object({"item": {"type": "string"}, "detail": {"type": "string"}, "source_chunk_ids": {"type": "array", "items": {"type": "string"}}})},
     "submission": {"type": "string"},
     "evaluation_criteria": {"type": "array", "items": {"type": "string"}},
@@ -50,6 +52,10 @@ INSTRUCTIONS = (
     "or procurement form, and content_provider for who supplies the subject-matter content. Summarize each "
     "field from explicit source evidence. If the source does not state it, return an empty detail and empty "
     "source_chunk_ids. Do not infer a content provider from creative approval or brand guidance. "
+    "For project_facts, extract the intended viewers, learners, or users; the deadline to finish the project "
+    "(not the proposal submission deadline); and the explicit method for submitting the bid, respectively. "
+    "Do not confuse the contract arrangement with the bid submission method. If a fact is absent, return an "
+    "empty detail and empty source_chunk_ids. Cite the source_chunk_ids for every nonempty project fact. "
     "Put specific vendor tasks and deliverables in scope_table as rows; return an empty array if none are stated. "
     "Put stated evaluation criteria in evaluation_criteria, otherwise return an empty list. "
     "Extract submission requirements only from chunks "
@@ -128,6 +134,15 @@ def generate_report(documents: list[dict[str, Any]], matches: list[dict[str, Any
         cited = [value for value in item.get("source_chunk_ids", []) if value in source_ids]
         detail = str(item.get("detail", "")).strip() if cited else ""
         report["scope"][key] = {"detail": detail, "source_chunk_ids": cited if detail else []}
+    facts = report.get("project_facts") if isinstance(report.get("project_facts"), dict) else {}
+    report["project_facts"] = {}
+    for key in ("audience", "project_deadline", "bid_submission_method"):
+        item = facts.get(key)
+        if not isinstance(item, dict):
+            item = {}
+        cited = [value for value in item.get("source_chunk_ids", []) if value in source_ids]
+        detail = str(item.get("detail", "")).strip() if cited else ""
+        report["project_facts"][key] = {"detail": detail, "source_chunk_ids": cited if detail else []}
     for section in ("scope_table", "deadlines"):
         report[section] = [item for item in report.get(section, [])
                            if isinstance(item, dict) and any(value in source_ids for value in item.get("source_chunk_ids", []))]
@@ -140,6 +155,18 @@ def generate_report(documents: list[dict[str, Any]], matches: list[dict[str, Any
         item["source_chunk_ids"] = [value for value in item["source_chunk_ids"] if value in approved]
         item["file_ids"] = list(dict.fromkeys(value for value in item.get("file_ids", []) if value in file_ids))
         item["status"] = "review" if item["file_ids"] else "missing"
+    questions = []
+    if not report["scope"]["objective"]["detail"]:
+        questions.append("Mục tiêu chính của dự án là gì?")
+    if not report["project_facts"]["audience"]["detail"]:
+        questions.append("Sản phẩm hoặc dịch vụ này dành cho những người xem, người học hoặc người dùng nào?")
+    if not report["project_facts"]["project_deadline"]["detail"]:
+        questions.append("Deadline hoàn thành dự án là ngày nào?")
+    if not report["project_facts"]["bid_submission_method"]["detail"]:
+        questions.append("Hồ sơ dự thầu cần nộp theo hình thức nào (qua cổng điện tử, email hay trực tiếp)?")
+    if not report["scope_table"]:
+        questions.append("Phạm vi công việc cụ thể gồm những hạng mục và sản phẩm bàn giao nào?")
+    report["clarification_questions"] = questions
     report["source_truncated"] = truncated
     report["source_files"] = sorted({chunk.get("file", "") for chunk in approved.values() if chunk.get("file")})
     report["usage"] = summarize_usage(response)

@@ -11,6 +11,29 @@ SAMPLES = Path(__file__).parent / "samples"
 
 
 class BidReportTests(unittest.TestCase):
+    def test_no_clarification_questions_when_all_five_facts_have_sources(self):
+        documents = [{"file": "rfq.docx", "chunks": [{"id": "scope", "file": "rfq.docx",
+            "text": "The project serves teachers. Deliver by June 1. Email the bid. Produce a video.",
+            "labels": {"topics": ["Video"]}, "requirement_tier": "approved"}]}]
+
+        def requester(request):
+            self.assertIn("project_facts", request["text"]["format"]["schema"]["properties"])
+            answer = {"title": "Video", "buyer": "", "source_language": "English", "overview": "",
+                "scope": {"objective": {"detail": "Tạo video.", "source_chunk_ids": ["scope"]},
+                          "arrangement": {"detail": "", "source_chunk_ids": []},
+                          "content_provider": {"detail": "", "source_chunk_ids": []}},
+                "project_facts": {
+                    "audience": {"detail": "Giáo viên.", "source_chunk_ids": ["scope"]},
+                    "project_deadline": {"detail": "1/6.", "source_chunk_ids": ["scope"]},
+                    "bid_submission_method": {"detail": "Qua email.", "source_chunk_ids": ["scope"]}},
+                "scope_table": [{"item": "Video", "detail": "Sản xuất video.", "source_chunk_ids": ["scope"]}],
+                "submission": "", "evaluation_criteria": [], "deadlines": [], "requirements": []}
+            return {"status": "completed", "output": [{"content": [{"type": "output_text", "text": json.dumps(answer)}]}]}
+
+        with TemporaryDirectory() as folder:
+            report = generate_report(documents, [], db_path=Path(folder) / "library.sqlite3", requester=requester)
+        self.assertEqual(report["clarification_questions"], [])
+
     def test_report_uses_only_approved_sources_and_existing_files(self):
         with TemporaryDirectory() as folder:
             db = Path(folder) / "library.sqlite3"
@@ -37,6 +60,11 @@ class BidReportTests(unittest.TestCase):
                         "arrangement": {"detail": "", "source_chunk_ids": []},
                         "content_provider": {"detail": "Không có bằng chứng.", "source_chunk_ids": ["rejected"]},
                     },
+                    "project_facts": {
+                        "audience": {"detail": "Nhà tuyển chọn.", "source_chunk_ids": ["req"]},
+                        "project_deadline": {"detail": "Ngày mai.", "source_chunk_ids": ["rejected"]},
+                        "bid_submission_method": {"detail": "", "source_chunk_ids": []},
+                    },
                     "scope_table": [], "submission": "Nộp portfolio.", "evaluation_criteria": [], "deadlines": [],
                     "requirements": [
                         {"title": "Company portfolio", "detail": "Nộp portfolio", "category": "Giấy tờ",
@@ -57,6 +85,13 @@ class BidReportTests(unittest.TestCase):
             self.assertEqual(report["requirements"][0]["status"], "review")
             self.assertEqual(report["scope"]["objective"]["source_chunk_ids"], ["req"])
             self.assertEqual(report["scope"]["content_provider"], {"detail": "", "source_chunk_ids": []})
+            self.assertEqual(report["project_facts"]["audience"]["detail"], "Nhà tuyển chọn.")
+            self.assertEqual(report["project_facts"]["project_deadline"], {"detail": "", "source_chunk_ids": []})
+            self.assertEqual(report["clarification_questions"], [
+                "Deadline hoàn thành dự án là ngày nào?",
+                "Hồ sơ dự thầu cần nộp theo hình thức nào (qua cổng điện tử, email hay trực tiếp)?",
+                "Phạm vi công việc cụ thể gồm những hạng mục và sản phẩm bàn giao nào?",
+            ])
             self.assertEqual(report["source_files"], ["rfq.docx"])
             self.assertEqual(len(report["usage_events"]), 1)
             self.assertAlmostEqual(report["usage"]["estimated_cost_usd"], 0.0002)

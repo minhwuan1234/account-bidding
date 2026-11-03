@@ -17,6 +17,8 @@ Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Thả một hoặc nhiều 
 
 Phần **Phạm vi công việc** luôn có bốn mục: mục tiêu chính của project, hình thức, bên cung cấp nội dung chuyên môn và việc vendor phải làm. Mục nào không có bằng chứng trong tài liệu sẽ hiện “Hồ sơ không nêu rõ.”
 
+Cuối bản tổng hợp, **Câu hỏi nháp** hiện dưới dạng gạch đầu dòng khi thiếu bằng chứng về mục tiêu dự án, đối tượng xem/học/sử dụng, deadline hoàn thành dự án, cách nộp thầu hoặc phạm vi công việc. Mục đã có thông tin sẽ không sinh câu hỏi.
+
 ### Semantic chunking
 
 Chế độ **chia theo ngữ nghĩa trong từng mục** được bật mặc định với ngưỡng `0.85`. Tùy chọn này được ẩn khỏi giao diện. Mô hình mặc định là [`intfloat/multilingual-e5-small`](https://huggingface.co/intfloat/multilingual-e5-small), hỗ trợ nhiều ngôn ngữ. Lần dùng đầu tiên cần Internet để tải mô hình khoảng vài trăm MB vào bộ nhớ đệm của máy; sau đó việc chia ngữ nghĩa và suy ra chủ đề đều tính local. Bước chia ngữ nghĩa và suy ra chủ đề chạy trên máy; các lượt gợi ý file và tổng hợp gửi văn bản cần thiết tới OpenAI API.
