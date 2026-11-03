@@ -153,7 +153,8 @@ def build_timeline_request(source_chunks: list[dict[str, Any]]) -> dict[str, Any
             SOW_COMMON +
             "Tìm mọi mốc quan trọng của hồ sơ thầu và dự án: hạn nộp, hạn gửi câu hỏi, họp tiền thầu, "
             "hạn giao sản phẩm hoặc mốc khác được ghi rõ. Mỗi mốc là một hàng với label ngắn, cụ thể. "
-            "Nếu nguồn ghi đủ ngày tháng năm, viết value theo DD/MM/YYYY và giữ nguyên giờ cùng múi giờ "
+            "Nếu nguồn ghi đủ ngày tháng năm, viết value theo DD/MM/YYYY, HH:mm và múi giờ khi có; "
+            "giữ nguyên giờ cùng múi giờ "
             "đã nêu. Không tự đổi múi giờ, không bịa năm hoặc tính ngày từ một mốc tương đối. "
             "Nếu chỉ có thời hạn tương đối, mô tả đúng như nguồn trong value. note chỉ giữ chỉ dẫn ngắn "
             "liên quan đến mốc đó. Không có mốc thì trả deadlines rỗng."
