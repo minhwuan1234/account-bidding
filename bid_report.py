@@ -42,8 +42,11 @@ REPORT_SCHEMA = _object({
 
 
 INSTRUCTIONS = (
-    "Create a practical Vietnamese bid brief from the supplied document chunks, tag-level file suggestions, "
+    "Create a concise Vietnamese bid brief from the supplied document chunks, tag-level file suggestions, "
     "and Markdown descriptions of library files. Follow the sections in the JSON schema. "
+    "Write all narrative headings, summaries, requirement details, and questions in Vietnamese. "
+    "Keep only decision-relevant information: overview at most two short sentences; each scope detail at most "
+    "two short sentences; each requirement detail one short sentence. Avoid repeating the same fact across sections. "
     "Summarize the project and scope from approved chunks and reviewed considerable context in up to four short scope sections. "
     "Use reviewed_context to add source-backed details to the overview, scope, timeline, or questions where useful. "
     "Reviewed considerable context may clarify the brief but must not become a confirmed submission requirement. "
