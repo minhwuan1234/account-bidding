@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, Callable
 
+from considerable_review import review_considerable
 from library_store import list_files
 from llm_tag_match import MODEL, openai_request
 from usage_cost import summarize_usage
@@ -43,7 +44,9 @@ REPORT_SCHEMA = _object({
 INSTRUCTIONS = (
     "Create a practical Vietnamese bid brief from the supplied document chunks, tag-level file suggestions, "
     "and Markdown descriptions of library files. Follow the sections in the JSON schema. "
-    "Summarize the project and scope from all source chunks in up to four short scope sections. "
+    "Summarize the project and scope from approved chunks and reviewed considerable context in up to four short scope sections. "
+    "Use reviewed_context to add source-backed details to the overview, scope, timeline, or questions where useful. "
+    "Reviewed considerable context may clarify the brief but must not become a confirmed submission requirement. "
     "Put concrete services or deliverables in scope_table as rows when the source supports them. "
     "Put stated evaluation criteria in evaluation_criteria, otherwise return an empty list. "
     "Extract submission requirements only from chunks "
@@ -59,9 +62,12 @@ INSTRUCTIONS = (
 )
 
 
-def build_request(chunks: list[dict[str, Any]], matches: list[dict[str, Any]], files: list[dict[str, Any]]) -> tuple[dict[str, Any], bool]:
+def build_request(chunks: list[dict[str, Any]], matches: list[dict[str, Any]], files: list[dict[str, Any]],
+                  reviewed_facts: list[dict[str, Any]] | None = None) -> tuple[dict[str, Any], bool]:
     approved = [chunk for chunk in chunks if chunk.get("requirement_tier") == "approved"]
-    others = [chunk for chunk in chunks if chunk.get("requirement_tier") != "approved"]
+    reviewed_facts = reviewed_facts or []
+    reviewed_ids = {chunk_id for fact in reviewed_facts for chunk_id in fact["source_chunk_ids"]}
+    others = [chunk for chunk in chunks if chunk.get("requirement_tier") == "considerable" and chunk.get("id") in reviewed_ids]
     source = []
     used = 0
     truncated = False
@@ -78,8 +84,13 @@ def build_request(chunks: list[dict[str, Any]], matches: list[dict[str, Any]], f
             "requirement_tier": chunk.get("requirement_tier", "reject"), "text": text,
         })
         truncated |= len(str(chunk.get("text", ""))) > len(text)
+    source_ids = {chunk["id"] for chunk in source}
+    reviewed_facts = [dict(fact, source_chunk_ids=[chunk_id for chunk_id in fact["source_chunk_ids"] if chunk_id in source_ids])
+                      for fact in reviewed_facts]
+    reviewed_facts = [fact for fact in reviewed_facts if fact["source_chunk_ids"]]
     payload = {
         "source_chunks": source,
+        "reviewed_context": reviewed_facts,
         "tag_file_matches": [{"tag": item.get("tag", ""), "selected_file_ids": item.get("selected_file_ids", []),
                               "suggested_file_ids": [suggestion.get("file_id") for suggestion in item.get("suggestions", [])]}
                              for item in matches],
@@ -100,7 +111,13 @@ def generate_report(documents: list[dict[str, Any]], matches: list[dict[str, Any
     if not approved:
         raise ValueError("Chưa có tag approved để tạo bản tổng hợp")
     files = list_files(db_path)
-    request, truncated = build_request(chunks, matches, files)
+    review_error = ""
+    try:
+        reviewed = review_considerable(chunks, requester=requester)
+    except (RuntimeError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        reviewed = {"facts": [], "source_chunk_ids": [], "usage": None, "truncated": False}
+        review_error = str(exc)
+    request, truncated = build_request(chunks, matches, files, reviewed["facts"])
     response = requester(request)
     if response.get("status") != "completed":
         raise RuntimeError("Model chưa hoàn tất bản tổng hợp")
@@ -110,7 +127,8 @@ def generate_report(documents: list[dict[str, Any]], matches: list[dict[str, Any
     report = json.loads(text)
     if not isinstance(report, dict):
         raise RuntimeError("Bản tổng hợp không hợp lệ")
-    source_ids = {chunk.get("id") for chunk in chunks}
+    request_input = json.loads(request["input"])
+    source_ids = {chunk.get("id") for chunk in request_input["source_chunks"]}
     file_ids = {file["id"] for file in files}
     tags = {next(iter(chunk.get("labels", {}).get("topics", [])), "") for chunk in approved.values()}
     for section in ("scope", "scope_table", "deadlines"):
@@ -125,7 +143,13 @@ def generate_report(documents: list[dict[str, Any]], matches: list[dict[str, Any
         item["source_chunk_ids"] = [value for value in item["source_chunk_ids"] if value in approved]
         item["file_ids"] = list(dict.fromkeys(value for value in item.get("file_ids", []) if value in file_ids))
         item["status"] = "review" if item["file_ids"] else "missing"
-    report["source_truncated"] = truncated
+    report["additional_context"] = request_input["reviewed_context"]
+    report["considerable_review_error"] = review_error
+    report["source_truncated"] = truncated or reviewed["truncated"]
     report["source_files"] = sorted({chunk.get("file", "") for chunk in chunks if chunk.get("file")})
     report["usage"] = summarize_usage(response)
+    report["usage_events"] = [usage for usage in (reviewed["usage"], report["usage"]) if usage is not None]
+    report["usage_missing"] = bool(review_error or report["usage"] is None or
+                                   (any(chunk.get("requirement_tier") == "considerable" for chunk in chunks)
+                                    and reviewed["usage"] is None))
     return report
