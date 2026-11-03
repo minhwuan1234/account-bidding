@@ -66,7 +66,7 @@ Gợi ý chỉ dựa trên mô tả file; nó chưa xác nhận file đáp ứng
 
 ## Thời gian và chi phí mỗi lần chạy
 
-Màn hình chính hiển thị thời gian từ lúc bấm **Phân tích** đến khi gợi ý file và bản tổng hợp hoàn tất, số lượt gọi model, token vào/ra và chi phí API ước tính bằng USD. Mỗi lần bấm **Tạo lại** cũng được ghi thành một lượt riêng. Các lượt trước được giữ trong phiên trang hiện tại và kèm trong JSON xuất ra. Phân tích embedding local không phát sinh chi phí OpenAI API.
+Nhãn nhỏ ở góc trên màn hình chính chỉ hiển thị thời gian từ lúc bấm **Phân tích** đến khi gợi ý file và bản tổng hợp hoàn tất, cùng chi phí API ước tính bằng USD. Mỗi lần bấm **Tạo lại** cũng được ghi thành một lượt riêng. Số lượt gọi model, token vào/ra và các lượt trước được giữ trong phiên trang hiện tại và kèm trong JSON xuất ra. Phân tích embedding local không phát sinh chi phí OpenAI API.
 
 Chi phí được tính từ trường `usage` của từng phản hồi OpenAI Responses API. Với `gpt-6-luna` Standard, ứng dụng dùng đơn giá [$0,10/1 triệu token đầu vào, $0,01/1 triệu token đầu vào được cache, $0,125/1 triệu token ghi cache và $0,50/1 triệu token đầu ra](https://developers.openai.com/api/docs/models/gpt-6-luna). Nếu đổi sang model khác hoặc API không trả đủ dữ liệu, giao diện báo **Chưa xác định** thay vì hiển thị $0. Đây là ước tính, không phải số tiền thanh toán cuối cùng.
 
