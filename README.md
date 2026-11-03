@@ -13,16 +13,16 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Chọn một hoặc nhiều PDF/DOCX rồi bấm **Phân tích**. Trong một lần chạy, ứng dụng **chia chunk, suy ra chủ đề và xếp tag vào approved và reject**. Tag Approved tự đi tiếp để gợi ý file. Trong lúc chờ, giao diện hiện một dòng tên các file đang được phân tích; khi hoàn tất, ứng dụng hiện **bản tổng hợp ngay trên màn hình chính** gồm phạm vi công việc, mốc thời gian, yêu cầu nộp và file đối chiếu. **Thư viện file** nằm ở tab riêng. Nhấn `Control+C` trong Terminal để dừng. Khi chạy local, ứng dụng chỉ lắng nghe `127.0.0.1`; bước gợi ý gửi text tag và mô tả Markdown tới OpenAI API.
+Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Thả một hoặc nhiều PDF/DOCX vào ô đầu trang hoặc bấm vào ô để chọn; phân tích bắt đầu tự động. Trong một lần chạy, ứng dụng **chia chunk, suy ra chủ đề và xếp tag vào approved và reject**. Tag Approved tự đi tiếp để gợi ý file. Trong lúc chờ, giao diện hiện một dòng tên các file đang được phân tích; khi hoàn tất, ứng dụng hiện **bản tổng hợp ngay trên màn hình chính** gồm phạm vi công việc, mốc thời gian, yêu cầu nộp và file đối chiếu. **Thư viện file** nằm ở tab riêng. Nhấn `Control+C` trong Terminal để dừng. Khi chạy local, ứng dụng chỉ lắng nghe `127.0.0.1`; bước gợi ý gửi text tag và mô tả Markdown tới OpenAI API.
 
 ### Semantic chunking
 
-Chế độ **Chia theo ngữ nghĩa trong từng mục** được bật mặc định trong **Tùy chọn chia đoạn**. Ngưỡng giống nhau mặc định là `0.85`: tăng ngưỡng sẽ chia nhiều hơn, giảm ngưỡng sẽ giữ các đoạn gần nhau hơn. Mô hình mặc định là [`intfloat/multilingual-e5-small`](https://huggingface.co/intfloat/multilingual-e5-small), hỗ trợ nhiều ngôn ngữ. Lần dùng đầu tiên cần Internet để tải mô hình khoảng vài trăm MB vào bộ nhớ đệm của máy; sau đó việc chia ngữ nghĩa và suy ra chủ đề đều tính local. Không tải tài liệu của bạn lên dịch vụ ngoài.
+Chế độ **chia theo ngữ nghĩa trong từng mục** được bật mặc định với ngưỡng `0.85`. Tùy chọn này được ẩn khỏi giao diện. Mô hình mặc định là [`intfloat/multilingual-e5-small`](https://huggingface.co/intfloat/multilingual-e5-small), hỗ trợ nhiều ngôn ngữ. Lần dùng đầu tiên cần Internet để tải mô hình khoảng vài trăm MB vào bộ nhớ đệm của máy; sau đó việc chia ngữ nghĩa và suy ra chủ đề đều tính local. Bước chia ngữ nghĩa và suy ra chủ đề chạy trên máy; các lượt gợi ý file và tổng hợp gửi văn bản cần thiết tới OpenAI API.
 
 ## Thử nhanh
 
 1. Mở tab **Thư viện file**, thêm `samples/sample.pdf` (có thể chọn nhiều file cùng lúc). Ứng dụng tự tạo mô tả Markdown; mở mục **Mô tả Markdown** để xem hoặc sửa.
-2. Quay lại màn hình **Tổng quan bid**, chọn `samples/sample.docx` và bấm **Phân tích** (cũng có thể chọn nhiều file đầu vào cùng lúc). Đợi dòng trạng thái phân tích biến mất khi có kết quả.
+2. Quay lại màn hình **Tổng quan bid**, thả `samples/sample.docx` vào ô tải file (cũng có thể thả nhiều file đầu vào cùng lúc). Đợi dòng trạng thái phân tích biến mất khi có kết quả.
 3. Cấu hình `OPEN_AI_API_KEY` trên máy chủ. Gợi ý cho các tag `approved` sẽ chạy tự động. Xem text của từng tag, đánh dấu file muốn dùng, hoặc mở **Thêm file khác** để chọn file trong thư viện hay tải PDF/DOCX mới.
 4. Xem bản tổng hợp ngay trên màn hình chính để xem yêu cầu, chọn hoặc tải thêm file cho từng yêu cầu, chỉnh trạng thái và in hoặc lưu PDF. Chạy kiểm thử bằng `python -m unittest -v`.
 
