@@ -1,3 +1,7 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+# Railway runs on Linux CPU; pin the CPU wheel before sentence-transformers
+# resolves torch so the image does not include CUDA packages.
+torch==2.7.0+cpu ; sys_platform == "linux" and platform_machine == "x86_64"
 pdfplumber>=0.11,<1
 python-docx>=1.1,<2
 sentence-transformers>=3,<7

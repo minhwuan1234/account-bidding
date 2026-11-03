@@ -70,14 +70,24 @@ def split_semantic(chunks: list[dict[str, Any]], *, threshold: float = 0.85, emb
         raise ValueError("Ngưỡng ngữ nghĩa phải nằm trong khoảng 0.50–0.95")
     # E5 recommends the query prefix for symmetric similarity comparisons.
     model = embedder or local_model()
-    output = []
+    prepared = []
+    all_sentences = []
     for chunk in chunks:
         units = _units(chunk["blocks"])
         sentences = [(i, block) for i, block in enumerate(units) if block["kind"] == "paragraph"]
+        prepared.append((chunk, units, sentences))
+        all_sentences.extend(block["text"] for _, block in sentences)
+    # Encode the document in one call; SentenceTransformer batches internally.
+    # Repeated calls for every section add substantial overhead on shared CPUs.
+    all_vectors = model.encode(["query: " + text for text in all_sentences], normalize_embeddings=True) if all_sentences else []
+    output = []
+    offset = 0
+    for chunk, units, sentences in prepared:
+        vectors = all_vectors[offset:offset + len(sentences)]
+        offset += len(sentences)
         if len(sentences) < 2:
             output.append(_build_chunk(chunk, units, 1, None))
             continue
-        vectors = model.encode(["query: " + block["text"] for _, block in sentences], normalize_embeddings=True)
         scores = [_cosine(vectors[j - 1], vectors[j]) for j in range(1, len(sentences))]
         start = 0
         segment_number = 1

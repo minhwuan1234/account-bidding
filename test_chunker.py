@@ -85,6 +85,28 @@ class ChunkerTests(unittest.TestCase):
         self.assertEqual(chunks[0]["text"], "Design the website. Build the prototype.")
         self.assertEqual(chunks[1]["text"], "Pay the invoice. Send the receipt.")
 
+    def test_semantic_embeddings_are_batched_across_sections(self):
+        class FakeEmbedder:
+            def __init__(self):
+                self.calls = 0
+
+            def encode(self, texts, normalize_embeddings=False):
+                self.calls += 1
+                return [[1.0, 0.0] for _ in texts]
+
+        blocks = [
+            Block("heading", "Scope", level=1),
+            Block("paragraph", "Design the prototype."),
+            Block("paragraph", "Build the prototype."),
+            Block("heading", "Submission", level=1),
+            Block("paragraph", "Prepare the offer."),
+            Block("paragraph", "Submit the offer."),
+        ]
+        fake = FakeEmbedder()
+        chunks = split_semantic(make_chunks(blocks, "example.docx"), embedder=fake)
+        self.assertEqual(fake.calls, 1)
+        self.assertEqual([chunk["section_path"] for chunk in chunks], [["Scope"], ["Submission"]])
+
     def test_plain_section_heading_becomes_label(self):
         with TemporaryDirectory() as folder:
             path = Path(folder) / "rfq.docx"
