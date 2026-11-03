@@ -23,7 +23,9 @@ REPORT_SCHEMA = _object({
     "source_language": {"type": "string"},
     "overview": {"type": "string"},
     "scope": {"type": "array", "items": _object({"heading": {"type": "string"}, "detail": {"type": "string"}, "source_chunk_ids": {"type": "array", "items": {"type": "string"}}})},
+    "scope_table": {"type": "array", "items": _object({"item": {"type": "string"}, "detail": {"type": "string"}, "source_chunk_ids": {"type": "array", "items": {"type": "string"}}})},
     "submission": {"type": "string"},
+    "evaluation_criteria": {"type": "array", "items": {"type": "string"}},
     "deadlines": {"type": "array", "items": _object({"label": {"type": "string"}, "value": {"type": "string"}, "note": {"type": "string"}, "source_chunk_ids": {"type": "array", "items": {"type": "string"}}})},
     "requirements": {"type": "array", "items": _object({
         "title": {"type": "string"}, "detail": {"type": "string"},
@@ -40,7 +42,10 @@ REPORT_SCHEMA = _object({
 INSTRUCTIONS = (
     "Create a practical Vietnamese bid brief from the supplied document chunks, tag-level file suggestions, "
     "and Markdown descriptions of library files. Follow the sections in the JSON schema. "
-    "Summarize the project and scope from all source chunks, but extract submission requirements only from chunks "
+    "Summarize the project and scope from all source chunks in up to four short scope sections. "
+    "Put concrete services or deliverables in scope_table as rows when the source supports them. "
+    "Put stated evaluation criteria in evaluation_criteria, otherwise return an empty list. "
+    "Extract submission requirements only from chunks "
     "whose requirement_tier is approved. Include concrete deliverables, deadlines, documents to submit, and "
     "ambiguities worth asking the buyer about when the source supports them. Keep dates exactly as stated in "
     "the source; do not invent a time zone conversion. Every scope item, deadline, and requirement must cite "
@@ -107,7 +112,7 @@ def generate_report(documents: list[dict[str, Any]], matches: list[dict[str, Any
     source_ids = {chunk.get("id") for chunk in chunks}
     file_ids = {file["id"] for file in files}
     tags = {next(iter(chunk.get("labels", {}).get("topics", [])), "") for chunk in approved.values()}
-    for section in ("scope", "deadlines"):
+    for section in ("scope", "scope_table", "deadlines"):
         report[section] = [item for item in report.get(section, [])
                            if isinstance(item, dict) and any(value in source_ids for value in item.get("source_chunk_ids", []))]
         for item in report[section]:

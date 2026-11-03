@@ -30,7 +30,8 @@ class BidReportTests(unittest.TestCase):
                 answer = {
                     "title": "Prototype bid", "buyer": "", "source_language": "English", "overview": "Dự án prototype.",
                     "scope": [{"heading": "Mục tiêu", "detail": "Làm prototype.", "source_chunk_ids": ["scope"]}],
-                    "submission": "Nộp portfolio.", "deadlines": [],
+                    "scope_table": [{"item": "Prototype", "detail": "Làm prototype.", "source_chunk_ids": ["scope"]}],
+                    "submission": "Nộp portfolio.", "evaluation_criteria": [], "deadlines": [],
                     "requirements": [
                         {"title": "Company portfolio", "detail": "Nộp portfolio", "category": "Giấy tờ", "tag": "Company portfolio",
                          "source_chunk_ids": ["req"], "file_ids": [saved["id"], "invented"], "reason": "Mô tả phù hợp"},
@@ -46,3 +47,4 @@ class BidReportTests(unittest.TestCase):
             self.assertEqual(report["requirements"][0]["file_ids"], [saved["id"]])
             self.assertEqual(report["requirements"][0]["status"], "review")
             self.assertEqual(report["scope"][0]["source_chunk_ids"], ["scope"])
+            self.assertEqual(report["scope_table"][0]["item"], "Prototype")

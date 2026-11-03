@@ -13,7 +13,7 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Chọn một hoặc nhiều PDF/DOCX rồi bấm **Phân tích**. Trong một lần chạy, ứng dụng **chia chunk, suy ra chủ đề và xếp tag vào approved, considerable và reject**. Tag Approved tự đi tiếp để gợi ý file; bấm **Xem tag** nếu muốn xem ba nhóm và nội dung chunk. Khi gợi ý hoàn tất, ứng dụng tạo **Bản tổng hợp** gồm phạm vi công việc, mốc thời gian, yêu cầu nộp và file đối chiếu. **Thư viện file** nằm ở tab riêng. Bạn chọn file muốn dùng rồi bấm **Xuất JSON**. Nhấn `Control+C` trong Terminal để dừng. Khi chạy local, ứng dụng chỉ lắng nghe `127.0.0.1`; bước gợi ý gửi text tag và mô tả Markdown tới OpenAI API.
+Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Chọn một hoặc nhiều PDF/DOCX rồi bấm **Phân tích**. Trong một lần chạy, ứng dụng **chia chunk, suy ra chủ đề và xếp tag vào approved, considerable và reject**. Tag Approved tự đi tiếp để gợi ý file; bấm **Xem tag** nếu muốn xem ba nhóm và nội dung chunk. Khi gợi ý hoàn tất, ứng dụng hiện **bản tổng hợp ngay trên màn hình chính** gồm phạm vi công việc, mốc thời gian, yêu cầu nộp và file đối chiếu. **Thư viện file** nằm ở tab riêng. Bạn chọn file muốn dùng rồi bấm **Xuất JSON**. Nhấn `Control+C` trong Terminal để dừng. Khi chạy local, ứng dụng chỉ lắng nghe `127.0.0.1`; bước gợi ý gửi text tag và mô tả Markdown tới OpenAI API.
 
 ### Semantic chunking
 
@@ -22,9 +22,9 @@ Chế độ **Chia theo ngữ nghĩa trong từng mục** được bật mặc �
 ## Thử nhanh
 
 1. Mở tab **Thư viện file**, thêm `samples/sample.pdf` (có thể chọn nhiều file cùng lúc). Ứng dụng tự tạo mô tả Markdown; mở mục **Mô tả Markdown** để xem hoặc sửa.
-2. Quay lại tab **Phân tích & gợi ý**, chọn `samples/sample.docx` và bấm **Phân tích** (cũng có thể chọn nhiều file đầu vào cùng lúc). Bấm **Xem tag** để xem ba nhóm; rê chuột vào tag để xem nội dung chunk.
+2. Quay lại màn hình **Tổng quan bid**, chọn `samples/sample.docx` và bấm **Phân tích** (cũng có thể chọn nhiều file đầu vào cùng lúc). Bấm **Xem tag** để xem ba nhóm; rê chuột vào tag để xem nội dung chunk.
 3. Cấu hình `OPEN_AI_API_KEY` trên máy chủ. Gợi ý cho các tag `approved` sẽ chạy tự động. Xem text của từng tag, đánh dấu file muốn dùng, hoặc mở **Thêm file khác** để chọn file trong thư viện hay tải PDF/DOCX mới.
-4. Mở tab **Bản tổng hợp** để xem yêu cầu, chọn hoặc tải thêm file cho từng yêu cầu, chỉnh trạng thái và in hoặc lưu PDF. Bấm **Xuất JSON** để lấy toàn bộ kết quả. Chạy kiểm thử bằng `python -m unittest -v`.
+4. Xem bản tổng hợp ngay trên màn hình chính để xem yêu cầu, chọn hoặc tải thêm file cho từng yêu cầu, chỉnh trạng thái và in hoặc lưu PDF. Bấm **Xuất JSON** để lấy toàn bộ kết quả. Chạy kiểm thử bằng `python -m unittest -v`.
 
 
 Để thấy sự khác biệt của chế độ semantic, chọn `samples/semantic_sample.docx`. Với ngưỡng `0.85`, ứng dụng tách phần thiết kế và phần thanh toán thành 2 chunk dù chúng nằm dưới cùng một tiêu đề.
@@ -58,11 +58,11 @@ Không cần duyệt thủ công. Popup **Xem tag** chỉ để kiểm tra các 
 
 Trong **Thư viện file**, có thể chọn nhiều PDF/DOCX trong một lần và bấm **Lưu file**; ứng dụng lưu từng file riêng. Ứng dụng lưu nguyên file trong SQLite local (`data/tag_examples.sqlite3`) và **tự tạo mô tả Markdown** từ tiêu đề, câu và hàng bảng đại diện trong file. Mô tả này mang tính trích lọc, không phải bản tóm tắt do LLM viết; có thể sửa trong mục **Mô tả Markdown** của từng file. File và mô tả vẫn có ở lần mở ứng dụng sau. Bản ZIP không chứa database cá nhân.
 
-Sau khi có tag `approved` và file trong thư viện, ứng dụng **tự gợi ý file** sau khi phân tích hoặc lưu file mới trong tab thư viện. Ứng dụng gửi text của từng tag (tối đa 30.000 ký tự cho mỗi tag) và **một mô tả Markdown cho mỗi file** trong thư viện tới OpenAI API. Model trả danh sách file có thể liên quan kèm lý do. Giao diện hiển thị tên tag, toàn bộ text tag và các file được gợi ý; bạn đánh dấu file muốn giữ. Trong mục **Thêm file khác** của mỗi tag, bạn có thể chọn một file khác đã có trong thư viện hoặc tải thêm PDF/DOCX. File tải thêm được lưu vào thư viện, tự tạo mô tả Markdown và được chọn cho tag đó.
+Sau khi có tag `approved` và file trong thư viện, ứng dụng **tự gợi ý file** sau khi phân tích hoặc lưu file mới trong tab thư viện. Ứng dụng gửi text của từng tag (tối đa 30.000 ký tự cho mỗi tag) và **một mô tả Markdown cho mỗi file** trong thư viện tới OpenAI API. Model trả danh sách file có thể liên quan kèm lý do. Mục **File gợi ý theo tag** nằm ở cuối màn hình chính và được thu gọn. Mở từng tag để xem text gốc, file gợi ý và đánh dấu file muốn giữ. Trong mục **Thêm file khác** của mỗi tag, bạn có thể chọn một file khác đã có trong thư viện hoặc tải thêm PDF/DOCX. File tải thêm được lưu vào thư viện, tự tạo mô tả Markdown và được chọn cho tag đó.
 
 Để bật gợi ý trên máy cá nhân, mở `local_api_key.py` và dán key vào dòng `OPEN_AI_API_KEY = "..."`, sau đó tải lại trang. Nếu cài từ Git hoặc ZIP và chưa có file này, sao chép `local_api_key.example.py` thành `local_api_key.py` trước. File chứa key được Git bỏ qua và không nằm trong bản ZIP. Bạn cũng có thể đặt biến môi trường `OPEN_AI_API_KEY` trước khi chạy ứng dụng (tên `OPENAI_API_KEY` cũng được hỗ trợ); biến môi trường được ưu tiên. Key không xuất hiện trong giao diện, database hoặc JSON. Có thể đổi model bằng `OPENAI_MODEL` (mặc định `gpt-6-luna`). Cuộc gọi model chỉ gửi text tag và mô tả Markdown, không gửi file nhị phân. Mỗi tag được gọi riêng nên thời gian và chi phí phụ thuộc số tag `approved` và độ dài mô tả.
 
-Gợi ý chỉ dựa trên mô tả file; nó chưa xác nhận file đáp ứng yêu cầu. Tab **Bản tổng hợp** dùng LLM để tổng hợp phạm vi, thời hạn và yêu cầu từ chunk Approved, liên kết từng yêu cầu với file có thể phù hợp. Bạn có thể chọn/bỏ file, tải thêm file và chỉnh trạng thái từng yêu cầu. Các lựa chọn ở bản tổng hợp được giữ trong phiên trình duyệt và trong JSON xuất ra; thư viện file và mô tả Markdown được lưu ở SQLite.
+Gợi ý chỉ dựa trên mô tả file; nó chưa xác nhận file đáp ứng yêu cầu. Bản tổng hợp trên màn hình chính dùng LLM để tổng hợp phạm vi, thời hạn và yêu cầu từ chunk Approved, liên kết từng yêu cầu với file có thể phù hợp. Bạn có thể chọn/bỏ file, tải thêm file và chỉnh trạng thái từng yêu cầu. Các lựa chọn ở bản tổng hợp được giữ trong phiên trình duyệt và trong JSON xuất ra; thư viện file và mô tả Markdown được lưu ở SQLite.
 
 ## Dữ liệu xuất
 
