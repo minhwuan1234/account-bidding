@@ -62,7 +62,7 @@ Trong **Thư viện file**, có thể chọn nhiều PDF/DOCX trong một lần 
 
 Sau khi có tag `approved`, bấm **Gợi ý file**. Ứng dụng gửi text của từng tag (tối đa 30.000 ký tự cho mỗi tag) và **một mô tả Markdown cho mỗi file** trong thư viện tới OpenAI API. Model trả danh sách file có thể liên quan kèm lý do. Giao diện hiển thị tên tag, toàn bộ text tag và các file được gợi ý; bạn đánh dấu file muốn giữ. Trong mục **Thêm file khác** của mỗi tag, bạn có thể chọn một file khác đã có trong thư viện hoặc tải thêm PDF/DOCX. File tải thêm được lưu vào thư viện, tự tạo mô tả Markdown và được chọn cho tag đó.
 
-Để bật gợi ý, đặt biến môi trường `OPEN_AI_API_KEY` trước khi chạy ứng dụng (tên `OPENAI_API_KEY` cũng được hỗ trợ). Key không xuất hiện trong giao diện, database hoặc JSON. Có thể đổi model bằng `OPENAI_MODEL` (mặc định `gpt-6-luna`). Cuộc gọi model chỉ gửi text tag và mô tả Markdown, không gửi file nhị phân. Mỗi tag được gọi riêng nên thời gian và chi phí phụ thuộc số tag `approved` và độ dài mô tả.
+Để bật gợi ý trên máy cá nhân, mở `local_api_key.py` và dán key vào dòng `OPEN_AI_API_KEY = "..."`, sau đó tải lại trang. Nếu cài từ Git hoặc ZIP và chưa có file này, sao chép `local_api_key.example.py` thành `local_api_key.py` trước. File chứa key được Git bỏ qua và không nằm trong bản ZIP. Bạn cũng có thể đặt biến môi trường `OPEN_AI_API_KEY` trước khi chạy ứng dụng (tên `OPENAI_API_KEY` cũng được hỗ trợ); biến môi trường được ưu tiên. Key không xuất hiện trong giao diện, database hoặc JSON. Có thể đổi model bằng `OPENAI_MODEL` (mặc định `gpt-6-luna`). Cuộc gọi model chỉ gửi text tag và mô tả Markdown, không gửi file nhị phân. Mỗi tag được gọi riêng nên thời gian và chi phí phụ thuộc số tag `approved` và độ dài mô tả.
 
 Gợi ý chỉ dựa trên mô tả file; nó chưa xác nhận file đáp ứng yêu cầu. Các lựa chọn file được giữ trong phiên trình duyệt hiện tại và có trong JSON xuất ra; thư viện file và mô tả Markdown được lưu ở SQLite.
 
@@ -87,6 +87,6 @@ Bố cục dashboard và bảng màu tham khảo nằm trong [design.md](design.
 
 Railway dùng `Procfile` để chạy `python app.py`. Ứng dụng tự nghe trên `0.0.0.0` và cổng từ biến môi trường `PORT`; khi chạy trên máy cá nhân vẫn dùng `127.0.0.1:8765`. Nếu Railway đã có Start Command riêng, đặt nó thành `python app.py` hoặc bỏ giá trị cũ để Railpack đọc `Procfile`.
 
-GitHub Actions secret `OPEN_AI_API_KEY` không tự chuyển sang Railway. Trong Railway, mở service **Variables**, thêm biến `OPEN_AI_API_KEY` với cùng giá trị và deploy thay đổi. Không đưa giá trị key vào Git hoặc file trong project.
+GitHub Actions secret `OPEN_AI_API_KEY` không tự chuyển sang Railway. Trong Railway, mở service **Variables**, thêm biến `OPEN_AI_API_KEY` với cùng giá trị và deploy thay đổi. File `local_api_key.py` chỉ dùng cho bản chạy trên máy cá nhân; không commit hoặc tải file này lên server.
 
 SQLite trong thư mục `data/` là dữ liệu cục bộ của container. Nếu muốn giữ thư viện file và tag qua các lần deploy, cần gắn volume bền vững vào thư mục `data/` của ứng dụng. Giao diện hiện chưa có đăng nhập; chỉ nhập API key và tải tài liệu nhạy cảm khi bạn đã hạn chế quyền truy cập vào service.

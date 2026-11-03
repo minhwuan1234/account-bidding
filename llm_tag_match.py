@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+import ast
+from pathlib import Path
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -14,7 +16,24 @@ from library_store import list_files
 MODEL = os.environ.get("OPENAI_MODEL", "gpt-6-luna")
 MAX_TAG_CHARS = 30000
 def api_key() -> str:
-    return os.environ.get("OPEN_AI_API_KEY", "").strip() or os.environ.get("OPENAI_API_KEY", "").strip()
+    environment_key = os.environ.get("OPEN_AI_API_KEY", "").strip() or os.environ.get("OPENAI_API_KEY", "").strip()
+    if environment_key:
+        return environment_key
+    local_config = Path(__file__).with_name("local_api_key.py")
+    if not local_config.exists():
+        return ""
+    try:
+        module = ast.parse(local_config.read_text(encoding="utf-8"))
+        for statement in module.body:
+            if isinstance(statement, ast.Assign) and any(
+                isinstance(target, ast.Name) and target.id == "OPEN_AI_API_KEY"
+                for target in statement.targets
+            ):
+                value = ast.literal_eval(statement.value)
+                return value.strip() if isinstance(value, str) else ""
+    except (OSError, SyntaxError, ValueError, TypeError):
+        return ""
+    return ""
 
 
 def has_api_key() -> bool:

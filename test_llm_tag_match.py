@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from library_store import add_file
-from llm_tag_match import approved_tag_groups, has_api_key, match_one_tag
+from llm_tag_match import api_key, approved_tag_groups, has_api_key, match_one_tag
 
 
 SAMPLES = Path(__file__).parent / "samples"
@@ -16,6 +16,16 @@ class LLMTagTests(unittest.TestCase):
     def test_server_reads_named_secret_from_environment(self):
         with patch.dict(os.environ, {"OPEN_AI_API_KEY": "test-key", "OPENAI_API_KEY": ""}):
             self.assertTrue(has_api_key())
+
+    def test_local_key_file_is_read_without_restart(self):
+        with TemporaryDirectory() as folder:
+            config = Path(folder) / "local_api_key.py"
+            with patch.dict(os.environ, {"OPEN_AI_API_KEY": "", "OPENAI_API_KEY": ""}), \
+                 patch("llm_tag_match.__file__", str(Path(folder) / "llm_tag_match.py")):
+                config.write_text('OPEN_AI_API_KEY = "first-key"\n', encoding="utf-8")
+                self.assertEqual(api_key(), "first-key")
+                config.write_text('OPEN_AI_API_KEY = "second-key"\n', encoding="utf-8")
+                self.assertEqual(api_key(), "second-key")
 
     def test_only_approved_chunks_group_under_tag(self):
         chunks = [
