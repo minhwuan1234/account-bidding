@@ -15,7 +15,7 @@ python app.py
 
 Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Thả một hoặc nhiều PDF/DOCX vào ô đầu trang hoặc bấm vào ô để chọn, sau đó bấm nút xanh **Phân tích tài liệu** để xác nhận chạy. Trong một lần chạy, ứng dụng **chia chunk, suy ra chủ đề và xếp tag vào approved và reject**. Tag Approved tự đi tiếp để gợi ý file. Trong lúc chờ, giao diện hiện một dòng tên các file đang được phân tích; khi hoàn tất, ứng dụng hiện **bản tổng hợp ngay trên màn hình chính** gồm phạm vi công việc, mốc thời gian, yêu cầu nộp và file đối chiếu. **Thư viện file** nằm ở tab riêng. Nhấn `Control+C` trong Terminal để dừng. Khi chạy local, ứng dụng chỉ lắng nghe `127.0.0.1`; bước gợi ý gửi text tag và mô tả Markdown tới OpenAI API.
 
-Phần **Phạm vi công việc** luôn có bốn mục: mục tiêu chính của project, hình thức, bên cung cấp nội dung chuyên môn và việc vendor phải làm. Mục nào không có bằng chứng trong tài liệu sẽ hiện “Hồ sơ không nêu rõ.”
+Phần **Phạm vi công việc** luôn có sáu mục: mục tiêu chính của project, hình thức hợp đồng, bên cung cấp nội dung chuyên môn, hình thức nộp thầu, cách chấm điểm và đánh giá hồ sơ, và chi tiết cùng khối lượng công việc. Mỗi mục dùng một lượt đọc `gpt-6-luna` riêng; sáu lượt chạy đồng thời và chỉ lấy thông tin từ các đoạn tài liệu đầu vào. Mục không có bằng chứng sẽ hiện “Hồ sơ không nêu rõ.” Khối lượng và tỷ trọng điểm không được tự suy đoán.
 
 Cuối bản tổng hợp, **Câu hỏi nháp** hiện dưới dạng gạch đầu dòng khi thiếu bằng chứng về mục tiêu dự án, đối tượng xem/học/sử dụng, deadline hoàn thành dự án, cách nộp thầu hoặc phạm vi công việc. Mục đã có thông tin sẽ không sinh câu hỏi.
 
