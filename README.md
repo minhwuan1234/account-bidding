@@ -13,7 +13,7 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Thả một hoặc nhiều PDF/DOCX vào ô đầu trang hoặc bấm vào ô để chọn; phân tích bắt đầu tự động. Trong một lần chạy, ứng dụng **chia chunk, suy ra chủ đề và xếp tag vào approved và reject**. Tag Approved tự đi tiếp để gợi ý file. Trong lúc chờ, giao diện hiện một dòng tên các file đang được phân tích; khi hoàn tất, ứng dụng hiện **bản tổng hợp ngay trên màn hình chính** gồm phạm vi công việc, mốc thời gian, yêu cầu nộp và file đối chiếu. **Thư viện file** nằm ở tab riêng. Nhấn `Control+C` trong Terminal để dừng. Khi chạy local, ứng dụng chỉ lắng nghe `127.0.0.1`; bước gợi ý gửi text tag và mô tả Markdown tới OpenAI API.
+Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Thả một hoặc nhiều PDF/DOCX vào ô đầu trang hoặc bấm vào ô để chọn, sau đó bấm nút xanh **Phân tích tài liệu** để xác nhận chạy. Trong một lần chạy, ứng dụng **chia chunk, suy ra chủ đề và xếp tag vào approved và reject**. Tag Approved tự đi tiếp để gợi ý file. Trong lúc chờ, giao diện hiện một dòng tên các file đang được phân tích; khi hoàn tất, ứng dụng hiện **bản tổng hợp ngay trên màn hình chính** gồm phạm vi công việc, mốc thời gian, yêu cầu nộp và file đối chiếu. **Thư viện file** nằm ở tab riêng. Nhấn `Control+C` trong Terminal để dừng. Khi chạy local, ứng dụng chỉ lắng nghe `127.0.0.1`; bước gợi ý gửi text tag và mô tả Markdown tới OpenAI API.
 
 Phần **Phạm vi công việc** luôn có bốn mục: mục tiêu chính của project, hình thức, bên cung cấp nội dung chuyên môn và việc vendor phải làm. Mục nào không có bằng chứng trong tài liệu sẽ hiện “Hồ sơ không nêu rõ.”
 
@@ -24,7 +24,7 @@ Chế độ **chia theo ngữ nghĩa trong từng mục** được bật mặc �
 ## Thử nhanh
 
 1. Mở tab **Thư viện file**, thêm `samples/sample.pdf` (có thể chọn nhiều file cùng lúc). Ứng dụng tự tạo mô tả Markdown; mở mục **Mô tả Markdown** để xem hoặc sửa.
-2. Quay lại màn hình **Tổng quan bid**, thả `samples/sample.docx` vào ô tải file (cũng có thể thả nhiều file đầu vào cùng lúc). Đợi dòng trạng thái phân tích biến mất khi có kết quả.
+2. Quay lại màn hình **Tổng quan bid**, thả `samples/sample.docx` vào ô tải file (cũng có thể thả nhiều file đầu vào cùng lúc), rồi bấm **Phân tích tài liệu**. Đợi dòng trạng thái phân tích biến mất khi có kết quả.
 3. Cấu hình `OPEN_AI_API_KEY` trên máy chủ. Gợi ý file cho các tag `approved` chạy tự động. Thêm PDF/DOCX vào tab **Thư viện file** khi cần bổ sung tài liệu.
 4. Xem **Tài liệu cần nộp** trên màn hình chính, mở từng yêu cầu để chọn file liên quan từ thư viện. Nhãn **Có rồi/Thiếu** cập nhật theo lựa chọn. Hai nút **Tạo lại** và **In / Lưu PDF** nằm ở cuối báo cáo. Chạy kiểm thử bằng `python -m unittest -v`.
 
