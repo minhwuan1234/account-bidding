@@ -23,8 +23,8 @@ Chế độ **chia theo ngữ nghĩa trong từng mục** được bật mặc �
 
 1. Mở tab **Thư viện file**, thêm `samples/sample.pdf` (có thể chọn nhiều file cùng lúc). Ứng dụng tự tạo mô tả Markdown; mở mục **Mô tả Markdown** để xem hoặc sửa.
 2. Quay lại màn hình **Tổng quan bid**, thả `samples/sample.docx` vào ô tải file (cũng có thể thả nhiều file đầu vào cùng lúc). Đợi dòng trạng thái phân tích biến mất khi có kết quả.
-3. Cấu hình `OPEN_AI_API_KEY` trên máy chủ. Gợi ý cho các tag `approved` sẽ chạy tự động. Xem text của từng tag, đánh dấu file muốn dùng, hoặc mở **Thêm file khác** để chọn file trong thư viện hay tải PDF/DOCX mới.
-4. Xem bản tổng hợp ngay trên màn hình chính để xem yêu cầu, chọn hoặc tải thêm file cho từng yêu cầu, chỉnh trạng thái và in hoặc lưu PDF. Chạy kiểm thử bằng `python -m unittest -v`.
+3. Cấu hình `OPEN_AI_API_KEY` trên máy chủ. Gợi ý file cho các tag `approved` chạy tự động. Thêm PDF/DOCX vào tab **Thư viện file** khi cần bổ sung tài liệu.
+4. Xem **Tài liệu cần nộp** trên màn hình chính, mở từng yêu cầu để chọn file liên quan từ thư viện. Nhãn **Có rồi/Thiếu** cập nhật theo lựa chọn. Hai nút **Tạo lại** và **In / Lưu PDF** nằm ở cuối báo cáo. Chạy kiểm thử bằng `python -m unittest -v`.
 
 
 Để thấy sự khác biệt của chế độ semantic, chọn `samples/semantic_sample.docx`. Với ngưỡng `0.85`, ứng dụng tách phần thiết kế và phần thanh toán thành 2 chunk dù chúng nằm dưới cùng một tiêu đề.
