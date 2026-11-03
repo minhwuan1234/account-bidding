@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from analysis_jobs import get as get_analysis_job, submit as submit_analysis_job
 from chunker import chunk_file
 from description import describe_file
 from llm_tag_match import MODEL, has_api_key, match_one_tag
@@ -31,9 +32,33 @@ const files=document.querySelector('#files'), status=document.querySelector('#st
 function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n}
 function showTagPreview(button,topic,chunks,event){tagPreview.replaceChildren(el('strong','',topic),el('span','',chunks.map(item=>item.text).join('\n\n').slice(0,2500)));tagPreview.hidden=false;const rect=button.getBoundingClientRect(),x=event&&Number.isFinite(event.clientX)?event.clientX:rect.left,y=event&&Number.isFinite(event.clientY)?event.clientY:rect.bottom;tagPreview.style.left=Math.max(12,Math.min(x+14,innerWidth-tagPreview.offsetWidth-12))+'px';tagPreview.style.top=Math.max(12,Math.min(y+18,innerHeight-tagPreview.offsetHeight-12))+'px'}
 function hideTagPreview(){tagPreview.hidden=true}
+async function readChunkResponse(response){
+  const contentType=response.headers.get('Content-Type')||'';
+  if(!contentType.includes('application/json')){
+    if(response.status>=500)throw Error(`Máy chủ tạm ngắt khi xử lý (HTTP ${response.status}). Hãy thử lại sau ít phút.`);
+    throw Error(`Máy chủ trả phản hồi không hợp lệ (HTTP ${response.status}).`);
+  }
+  const data=await response.json();
+  if(!response.ok)throw Error(data.error||`Phân tích thất bại (HTTP ${response.status}).`);
+  return data;
+}
+async function analyzeFile(file,semantic,threshold){
+  const query='?filename='+encodeURIComponent(file.name)+'&semantic='+semantic+'&threshold='+encodeURIComponent(threshold);
+  const started=await readChunkResponse(await fetch('/api/chunk-job'+query,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file}));
+  if(!started.id)throw Error('Máy chủ không tạo được phiên phân tích.');
+  const deadline=Date.now()+15*60*1000;
+  while(Date.now()<deadline){
+    await new Promise(resolve=>setTimeout(resolve,1500));
+    const job=await readChunkResponse(await fetch('/api/chunk-job?id='+encodeURIComponent(started.id)));
+    if(job.status==='done')return job.result;
+    if(job.status==='error')throw Error(job.error||'Phân tích thất bại.');
+    if(job.status!=='queued'&&job.status!=='running')throw Error('Trạng thái phân tích không hợp lệ.');
+  }
+  throw Error('Phân tích quá 15 phút. Hãy thử lại sau.');
+}
 function nextStepTags(){return [...new Set(latest.flatMap(doc=>doc.chunks.filter(chunk=>chunk.requirement_tier==='approved').flatMap(chunk=>chunk.labels.topics)))]}
 function renderCandidates(){const groups={approved:new Map(),considerable:new Map(),reject:new Map()};for(const doc of latest)for(const chunk of doc.chunks)for(const topic of chunk.labels.topics){const tier=chunk.requirement_tier||'considerable',group=groups[tier];if(!group.has(topic))group.set(topic,[]);group.get(topic).push(chunk)}candidateBox.replaceChildren();candidateBox.hidden=!latest.length;compareBox.hidden=!latest.length;compareBtn.disabled=false;updateOverview();if(!latest.length)return;candidateBox.append(el('h2','','Duyệt tag'));candidateBox.append(el('p','hint','Chỉ tag approved đi tiếp. Rê chuột vào tag để xem nội dung đoạn; bấm tag để duyệt hoặc bỏ duyệt. Tag bạn duyệt được lưu trên máy làm mẫu cho lần sau.'));for(const tier of ['approved','considerable','reject']){const group=groups[tier];candidateBox.append(el('h3','',`${tier} (${group.size})`));const list=el('div','candidate-list');for(const [topic,chunks] of group){const chunk=chunks[0],button=el('button',tier+(chunk.approved_by_user?' chosen':''),`${topic} · ${Number(chunk.requirement_score).toFixed(2)}`);button.onpointerenter=event=>showTagPreview(button,topic,chunks,event);button.onpointermove=event=>showTagPreview(button,topic,chunks,event);button.onpointerleave=hideTagPreview;button.onfocus=()=>showTagPreview(button,topic,chunks);button.onblur=hideTagPreview;button.onclick=async()=>{hideTagPreview();button.disabled=true;const selected=!chunk.approved_by_user;try{const response=await fetch('/api/tag-choice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:topic,selected})});const data=await response.json();if(!response.ok)throw Error(data.error||'Không lưu được tag');for(const doc of latest)for(const item of doc.chunks)if(item.labels.topics.includes(topic)){item.approved_by_user=selected;item.requirement_tier=selected?'approved':item.requirement_model_tier;item.requirement_score=selected?1:item.requirement_model_score;item.requirement_candidate=item.requirement_tier==='approved'}latestMatch=null;compareResults.replaceChildren();renderCandidates()}catch(error){status.textContent='Lỗi lưu tag: '+error.message;button.disabled=false}};list.append(button)}candidateBox.append(list)}candidateBox.append(el('p','meta',`Đi tiếp: ${nextStepTags().length} tag approved`))}
-document.querySelector('#run').onclick=async()=>{latest=[];latestMatch=null;compareResults.replaceChildren();compareStatus.textContent='';candidateBox.hidden=true;compareBox.hidden=true;exportBtn.disabled=true;const selected=[...files.files];if(!selected.length){status.textContent='Hãy chọn PDF hoặc DOCX.';return}const button=document.querySelector('#run'),semantic=document.querySelector('#semantic').checked,threshold=document.querySelector('#threshold').value;button.disabled=true;let errors=[];try{for(const [index,file] of selected.entries()){status.textContent=`Đang phân tích ${index+1}/${selected.length}: ${file.name}`;try{const response=await fetch('/api/chunk?filename='+encodeURIComponent(file.name)+'&semantic='+semantic+'&threshold='+encodeURIComponent(threshold),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});const data=await response.json();if(!response.ok)throw Error(data.error||'Không đọc được file');latest.push(data);renderCandidates()}catch(error){errors.push(`${file.name}: ${error.message}`)}}exportBtn.disabled=!latest.length;status.textContent=`Đã phân tích ${latest.length}/${selected.length} tệp.`+(errors.length?' Lỗi: '+errors.join('; '):'');status.className=errors.length?'error':''}finally{button.disabled=false}};
+document.querySelector('#run').onclick=async()=>{latest=[];latestMatch=null;compareResults.replaceChildren();compareStatus.textContent='';candidateBox.hidden=true;compareBox.hidden=true;exportBtn.disabled=true;const selected=[...files.files];if(!selected.length){status.textContent='Hãy chọn PDF hoặc DOCX.';return}const button=document.querySelector('#run'),semantic=document.querySelector('#semantic').checked,threshold=document.querySelector('#threshold').value;button.disabled=true;let errors=[];try{for(const [index,file] of selected.entries()){status.textContent=`Đang phân tích ${index+1}/${selected.length}: ${file.name}`;try{const data=await analyzeFile(file,semantic,threshold);latest.push(data);renderCandidates()}catch(error){errors.push(`${file.name}: ${error.message}`)}}exportBtn.disabled=!latest.length;status.textContent=`Đã phân tích ${latest.length}/${selected.length} tệp.`+(errors.length?' Lỗi: '+errors.join('; '):'');status.className=errors.length?'error':''}finally{button.disabled=false}};
 function renderLibrary(){libraryList.replaceChildren();if(!library.length){libraryList.append(el('p','meta','Chưa có file trong thư viện.'));return}for(const file of library){const row=el('div','library-file');row.append(el('strong','',file.filename));const details=el('details'),summary=el('summary','','Mô tả Markdown');details.append(summary);const textarea=el('textarea');textarea.value=file.description_md;textarea.setAttribute('aria-label',`Mô tả ${file.filename}`);const save=el('button','secondary','Lưu mô tả');save.onclick=async()=>{save.disabled=true;try{const response=await fetch('/api/library-description',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:file.id,description_md:textarea.value})});const data=await response.json();if(!response.ok)throw Error(data.error||'Không lưu được mô tả');file.description_md=textarea.value;libraryStatus.textContent=`Đã lưu mô tả cho ${file.filename}.`}catch(error){libraryStatus.textContent='Lỗi: '+error.message}finally{save.disabled=false}};details.append(textarea,save);row.append(details);libraryList.append(row)}}
 async function saveLibraryFiles(filesToSave,onSaved){let saved=0,errors=[];for(const [index,file] of filesToSave.entries()){libraryStatus.textContent=`Đang lưu ${index+1}/${filesToSave.length}: ${file.name}`;try{const response=await fetch('/api/library?filename='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});const data=await response.json();if(!response.ok)throw Error(data.error||'Không lưu được file');saved++;if(onSaved)onSaved(data.file)}catch(error){errors.push(`${file.name}: ${error.message}`)}}await loadLibrary();libraryStatus.textContent=`Đã lưu ${saved}/${filesToSave.length} file và tạo mô tả Markdown riêng.`+(errors.length?' Lỗi: '+errors.join('; '):'');libraryStatus.className=errors.length?'error':'';return {saved,errors}}
 function renderTagResults(items){compareResults.replaceChildren();compareResults.append(el('h3','',`Gợi ý theo tag (${items.length})`));for(const item of items){item.selected_file_ids??=[];item.manual_files??=[];const card=el('article','tag-result'),head=el('header');head.append(el('h3','',item.tag),el('span','tag-count',`${item.suggestions.length} file gợi ý`));card.append(head,el('p','tag-label','Nội dung tag'),el('pre','tag-text',item.full_text));if(item.text_sent_to_model_truncated)card.append(el('div','req-warning','Model chỉ nhận 30.000 ký tự đầu; nội dung bên trên vẫn hiển thị đầy đủ.'));card.append(el('h4','','Chọn file cho tag này'));const grid=el('div','suggestion-grid'),all=[...item.suggestions,...item.manual_files];if(!all.length)grid.append(el('p','empty-result','Model chưa gợi ý file nào. Bạn có thể thêm file từ thư viện hoặc tải lên bên dưới.'));for(const suggestion of all){const row=el('label','suggestion select-suggestion'),check=el('input');check.type='checkbox';check.checked=item.selected_file_ids.includes(suggestion.file_id);check.setAttribute('aria-label',`Chọn ${suggestion.filename} cho tag ${item.tag}`);check.onchange=()=>{item.selected_file_ids=check.checked?[...new Set([...item.selected_file_ids,suggestion.file_id])]:item.selected_file_ids.filter(id=>id!==suggestion.file_id);selectedCount.textContent=`Đã chọn ${item.selected_file_ids.length} file`};const info=el('span');info.append(el('strong','',suggestion.filename),el('span','suggestion-verdict',suggestion.reason?`${suggestion.verdict==='match'?'Phù hợp':'Có thể phù hợp'} · ${suggestion.reason}`:'Bạn thêm'));row.append(check,info);grid.append(row)}card.append(grid);const selectedCount=el('p','selected-count',`Đã chọn ${item.selected_file_ids.length} file`);card.append(selectedCount);const add=el('details','tag-details');add.append(el('summary','','Thêm file khác'));const addBody=el('div','add-file-body'),fromLibrary=el('div','controls'),picker=el('select');picker.setAttribute('aria-label',`Chọn file khác cho tag ${item.tag}`);picker.append(el('option','','Chọn từ thư viện'));picker.firstChild.value='';const used=new Set(all.map(file=>file.file_id));for(const file of library)if(!used.has(file.id)){const option=el('option','',file.filename);option.value=file.id;picker.append(option)}const addButton=el('button','secondary','Thêm file');addButton.onclick=()=>{const file=library.find(entry=>entry.id===picker.value);if(!file)return;item.manual_files.push({file_id:file.id,filename:file.filename,verdict:'manual',reason:''});item.selected_file_ids=[...new Set([...item.selected_file_ids,file.id])];renderTagResults(items)};fromLibrary.append(picker,addButton);const uploadRow=el('div','controls'),upload=el('input'),uploadButton=el('button','secondary','Tải lên và chọn');upload.type='file';upload.accept='.pdf,.docx';upload.multiple=true;upload.setAttribute('aria-label',`Tải thêm file cho tag ${item.tag}`);uploadButton.onclick=async()=>{const filesToSave=[...upload.files];if(!filesToSave.length){compareStatus.textContent='Hãy chọn PDF hoặc DOCX để tải lên.';return}uploadButton.disabled=true;try{const result=await saveLibraryFiles(filesToSave,file=>{item.manual_files.push({file_id:file.id,filename:file.filename,verdict:'manual',reason:''});item.selected_file_ids=[...new Set([...item.selected_file_ids,file.id])]});compareStatus.textContent=`Đã thêm ${result.saved} file cho tag ${item.tag}.`+(result.errors.length?' Một số file không lưu được.':'');renderTagResults(items)}finally{uploadButton.disabled=false}};uploadRow.append(upload,uploadButton);addBody.append(fromLibrary,uploadRow);add.append(addBody);card.append(add);compareResults.append(card)}}
@@ -48,6 +73,15 @@ exportBtn.onclick=()=>{const blob=new Blob([JSON.stringify({schema_version:9,nex
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        url = urlparse(self.path)
+        if url.path == "/api/chunk-job":
+            job_id = parse_qs(url.query).get("id", [""])[0]
+            job = get_analysis_job(job_id)
+            if job is None:
+                self.respond(404, json.dumps({"error": "Phiên xử lý không còn. Hãy phân tích lại file."}, ensure_ascii=False).encode(), "application/json; charset=utf-8")
+            else:
+                self.respond(200, json.dumps(job, ensure_ascii=False).encode(), "application/json; charset=utf-8")
+            return
         if self.path == "/api/llm-status":
             ready = has_api_key()
             self.respond(200, json.dumps({"ready": ready, "model": MODEL}).encode(), "application/json; charset=utf-8")
@@ -62,6 +96,26 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         url = urlparse(self.path)
+        if url.path == "/api/chunk-job":
+            try:
+                params = parse_qs(url.query)
+                filename = Path(params.get("filename", [""])[0]).name
+                semantic = params.get("semantic", ["false"])[0].lower() == "true"
+                threshold = float(params.get("threshold", ["0.85"])[0])
+                size = int(self.headers.get("Content-Length", "0"))
+                if Path(filename).suffix.lower() not in (".pdf", ".docx"):
+                    raise ValueError("Chỉ hỗ trợ PDF và DOCX")
+                if size <= 0 or size > MAX_UPLOAD:
+                    raise ValueError("File rỗng hoặc vượt quá 30 MB")
+                if not 0.5 <= threshold <= 0.95:
+                    raise ValueError("Ngưỡng ngữ nghĩa phải nằm trong khoảng 0.50–0.95")
+                job_id = submit_analysis_job(filename, self.rfile.read(size), semantic, threshold)
+                self.respond(202, json.dumps({"id": job_id}).encode(), "application/json; charset=utf-8")
+            except RuntimeError as exc:
+                self.respond(503, json.dumps({"error": str(exc)}, ensure_ascii=False).encode(), "application/json; charset=utf-8")
+            except Exception as exc:
+                self.respond(400, json.dumps({"error": str(exc)}, ensure_ascii=False).encode(), "application/json; charset=utf-8")
+            return
         if url.path == "/api/library":
             try:
                 size = int(self.headers.get("Content-Length", "0"))

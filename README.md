@@ -85,6 +85,8 @@ Bố cục dashboard và bảng màu tham khảo nằm trong [design.md](design.
 
 ## Chạy trên Railway
 
+Khi bấm **Phân tích**, ứng dụng nhận file rồi xử lý trong nền; trang tự hỏi tiến độ và hiện chunk khi hoàn tất. Việc tải embedding model lần đầu có thể lâu hơn các lần sau nhưng không giữ một yêu cầu HTTP mở suốt quá trình. Nếu Railway thay phiên chạy giữa chừng, trang sẽ báo phiên phân tích đã mất và bạn có thể bấm **Phân tích** lại.
+
 Railway dùng `Procfile` để chạy `python app.py`. Ứng dụng tự nghe trên `0.0.0.0` và cổng từ biến môi trường `PORT`; khi chạy trên máy cá nhân vẫn dùng `127.0.0.1:8765`. Nếu Railway đã có Start Command riêng, đặt nó thành `python app.py` hoặc bỏ giá trị cũ để Railpack đọc `Procfile`.
 
 GitHub Actions secret `OPEN_AI_API_KEY` không tự chuyển sang Railway. Trong Railway, mở service **Variables**, thêm biến `OPEN_AI_API_KEY` với cùng giá trị và deploy thay đổi. File `local_api_key.py` chỉ dùng cho bản chạy trên máy cá nhân; không commit hoặc tải file này lên server.
