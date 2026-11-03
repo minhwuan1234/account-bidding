@@ -85,7 +85,7 @@ Bố cục dashboard và bảng màu tham khảo nằm trong [design.md](design.
 
 ## Chạy trên Railway
 
-Railway dùng `Procfile` để chạy `python app.py`. Ứng dụng tự nghe trên `0.0.0.0` và cổng từ biến môi trường `PORT`; khi chạy trên máy cá nhân vẫn dùng `127.0.0.1:8765`. Nếu Railway đã có Start Command riêng, đặt nó thành `python app.py` hoặc bỏ giá trị cũ để Railpack đọc `Procfile`.
+Railway tự dùng `Dockerfile` trong repository để build image. Dockerfile cài bản PyTorch chỉ dùng CPU để tránh kéo các thư viện CUDA lớn, và giữ lớp cài thư viện riêng để các lần chỉ sửa code có thể dùng lại cache. Ứng dụng tự nghe trên `0.0.0.0` và cổng từ biến môi trường `PORT`; khi chạy trên máy cá nhân vẫn dùng `127.0.0.1:8765`. Nếu Railway đã có Start Command riêng, đặt nó thành `python app.py` hoặc bỏ giá trị cũ để dùng lệnh trong Dockerfile.
 
 GitHub Actions secret `OPEN_AI_API_KEY` không tự chuyển sang Railway. Trong Railway, mở service **Variables**, thêm biến `OPEN_AI_API_KEY` với cùng giá trị và deploy thay đổi. File `local_api_key.py` chỉ dùng cho bản chạy trên máy cá nhân; không commit hoặc tải file này lên server.
 
