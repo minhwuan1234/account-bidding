@@ -8,25 +8,17 @@ from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from library_match import match_library
 from library_store import list_files
 
 
 MODEL = os.environ.get("OPENAI_MODEL", "gpt-6-luna")
 MAX_TAG_CHARS = 30000
-_RUNTIME_API_KEY = ""
+def api_key() -> str:
+    return os.environ.get("OPEN_AI_API_KEY", "").strip() or os.environ.get("OPENAI_API_KEY", "").strip()
 
 
 def has_api_key() -> bool:
-    return bool(_RUNTIME_API_KEY or os.environ.get("OPENAI_API_KEY", "").strip())
-
-
-def set_runtime_api_key(value: str) -> None:
-    global _RUNTIME_API_KEY
-    key = value.strip()
-    if len(key) < 16 or len(key) > 512:
-        raise ValueError("API key không hợp lệ")
-    _RUNTIME_API_KEY = key
+    return bool(api_key())
 
 MATCH_SCHEMA = {
     "type": "object",
@@ -50,9 +42,9 @@ MATCH_SCHEMA = {
 }
 
 INSTRUCTIONS = (
-    "You select candidate library files that might contain evidence for requirements in one approved document tag. "
+    "Suggest library files relevant to one approved document tag. "
     "Compare the tag's full chunk text with each file's Markdown description. "
-    "Return only files plausibly relevant to fulfilling or documenting the tag's requirements. "
+    "Return only files plausibly relevant to the tag's content. "
     "Use verdict 'match' for a strong topical fit and 'possible' for partial or uncertain fit; omit unrelated files. "
     "Do not claim that a requirement has been fulfilled: you only have file descriptions, not proof from file contents. "
     "Use only file_id values from the input. Give a short, specific reason in Vietnamese for every included file. "
@@ -104,9 +96,9 @@ def _response_text(data: dict[str, Any]) -> str:
 
 
 def openai_request(body: dict[str, Any]) -> dict[str, Any]:
-    key = _RUNTIME_API_KEY or os.environ.get("OPENAI_API_KEY", "").strip()
+    key = api_key()
     if not key:
-        raise RuntimeError("Chưa cấu hình OPENAI_API_KEY cho bước đối chiếu bằng LLM")
+        raise RuntimeError("Chưa cấu hình OPEN_AI_API_KEY trên máy chủ")
     request = Request(
         "https://api.openai.com/v1/responses",
         data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
@@ -122,7 +114,7 @@ def openai_request(body: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("Không kết nối được OpenAI API") from exc
 
 
-def match_one_tag(chunks: list[dict[str, Any]], *, db_path: Any = None, requester: Callable[[dict[str, Any]], dict[str, Any]] = openai_request, embedder: Any = None) -> dict[str, Any]:
+def match_one_tag(chunks: list[dict[str, Any]], *, db_path: Any = None, requester: Callable[[dict[str, Any]], dict[str, Any]] = openai_request) -> dict[str, Any]:
     groups = approved_tag_groups(chunks)
     if len(groups) != 1:
         raise ValueError("Mỗi lần chỉ đối chiếu một tag approved")
@@ -146,12 +138,10 @@ def match_one_tag(chunks: list[dict[str, Any]], *, db_path: Any = None, requeste
             "verdict": item["verdict"],
             "reason": str(item.get("reason", "")).strip()[:500],
         })
-    comparison = match_library(group["chunks"], mode="llm", manual_ids=[item["file_id"] for item in suggestions], db_path=db_path, embedder=embedder)
     return {
         "tag": group["tag"],
         "full_text": group["full_text"],
         "text_sent_to_model_truncated": len(group["full_text"]) > MAX_TAG_CHARS,
         "suggestions": suggestions,
-        "comparison": comparison,
         "model": MODEL,
     }

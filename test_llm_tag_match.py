@@ -1,21 +1,22 @@
 import json
+import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from library_store import add_file
-from llm_tag_match import approved_tag_groups, match_one_tag
+from llm_tag_match import approved_tag_groups, has_api_key, match_one_tag
 
 
 SAMPLES = Path(__file__).parent / "samples"
 
 
-class FakeEmbedder:
-    def encode(self, texts, normalize_embeddings=False):
-        return [[1.0, 0.0] if "prototype" in text.lower() else [0.0, 1.0] for text in texts]
-
-
 class LLMTagTests(unittest.TestCase):
+    def test_server_reads_named_secret_from_environment(self):
+        with patch.dict(os.environ, {"OPEN_AI_API_KEY": "test-key", "OPENAI_API_KEY": ""}):
+            self.assertTrue(has_api_key())
+
     def test_only_approved_chunks_group_under_tag(self):
         chunks = [
             {"id": "a", "file": "a.docx", "text": "First text", "labels": {"topics": ["Scope"]}, "requirement_tier": "approved"},
@@ -45,11 +46,11 @@ class LLMTagTests(unittest.TestCase):
                 ]}
                 return {"status": "completed", "output": [{"content": [{"type": "output_text", "text": json.dumps(answer)}]}]}
 
-            result = match_one_tag([chunk], db_path=db, requester=requester, embedder=FakeEmbedder())
+            result = match_one_tag([chunk], db_path=db, requester=requester)
             self.assertEqual(result["tag"], "Prototype")
             self.assertIn("must deliver", result["full_text"])
             self.assertEqual([item["file_id"] for item in result["suggestions"]], [saved["id"]])
-            self.assertEqual(result["comparison"]["counts"]["matched"], 1)
+            self.assertNotIn("comparison", result)
 
 
 if __name__ == "__main__":

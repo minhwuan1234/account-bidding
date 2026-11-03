@@ -13,7 +13,7 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Chọn một hoặc nhiều PDF/DOCX rồi bấm **Phân tích**. Trong một lần chạy, ứng dụng **chia chunk, suy ra chủ đề và xếp tag vào approved, considerable và reject**. Bạn có thể duyệt tag, thêm file sẵn có vào thư viện SQLite local, rồi đối chiếu và bấm **Xuất JSON**. Nhấn `Control+C` trong Terminal để dừng. Ứng dụng chỉ lắng nghe `127.0.0.1`; tệp không được gửi lên dịch vụ ngoài.
+Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Chọn một hoặc nhiều PDF/DOCX rồi bấm **Phân tích**. Trong một lần chạy, ứng dụng **chia chunk, suy ra chủ đề và xếp tag vào approved, considerable và reject**. Bạn có thể duyệt tag, thêm file vào thư viện SQLite local, nhận gợi ý từ model, chọn file và bấm **Xuất JSON**. Nhấn `Control+C` trong Terminal để dừng. Khi chạy local, ứng dụng chỉ lắng nghe `127.0.0.1`; bước gợi ý gửi text tag và mô tả Markdown tới OpenAI API.
 
 ### Semantic chunking
 
@@ -23,8 +23,8 @@ Chế độ **Chia theo ngữ nghĩa trong từng mục** được bật mặc �
 
 1. Thêm `samples/sample.pdf` vào **Thư viện file** (có thể chọn nhiều file cùng lúc). Ứng dụng tự tạo mô tả Markdown; mở mục **Mô tả Markdown** để xem hoặc sửa.
 2. Chọn `samples/sample.docx` trong ô **Phân tích tài liệu** và bấm **Phân tích** (cũng có thể chọn nhiều file đầu vào cùng lúc). Giao diện hiện ba nhóm tag; rê chuột vào tag để xem nội dung chunk.
-3. Nếu có tag `approved`, chọn **Tôi tự chọn file**, đánh dấu `sample.pdf` trong thư viện và bấm **Đối chiếu**. Khi đã cấu hình OpenAI API key, thử **LLM gợi ý theo từng tag** để xem text đầy đủ và file LLM đề xuất cho mỗi tag.
-4. Bấm **Xuất JSON** để xem chunk, nguồn và kết quả đối chiếu. Chạy kiểm thử bằng `python -m unittest -v`.
+3. Cấu hình `OPEN_AI_API_KEY` trên máy chủ, rồi bấm **Gợi ý file** khi có tag `approved`. Xem text của từng tag, đánh dấu file gợi ý muốn dùng, hoặc mở **Thêm file khác** để chọn file trong thư viện hay tải PDF/DOCX mới.
+4. Bấm **Xuất JSON** để lấy chunk, gợi ý và danh sách file bạn đã chọn. Chạy kiểm thử bằng `python -m unittest -v`.
 
 
 Để thấy sự khác biệt của chế độ semantic, chọn `samples/semantic_sample.docx`. Với ngưỡng `0.85`, ứng dụng tách phần thiết kế và phần thanh toán thành 2 chunk dù chúng nằm dưới cùng một tiêu đề.
@@ -56,21 +56,19 @@ Chỉ tag `approved` xuất hiện trong `next_step_tags` để dùng cho bướ
 
 Các ngưỡng trên đang dùng thử và có thể cần chỉnh sau khi xem dữ liệu thật.
 
-## Thư viện file và đối chiếu yêu cầu
+## Thư viện file và gợi ý theo tag
 
 Trong **Thư viện file**, có thể chọn nhiều PDF/DOCX trong một lần và bấm **Lưu file**; ứng dụng lưu từng file riêng. Ứng dụng lưu nguyên file trong cùng SQLite local với tag đã duyệt (`data/tag_examples.sqlite3`) và **tự tạo mô tả Markdown** từ tiêu đề, câu và hàng bảng đại diện trong file. Mô tả này mang tính trích lọc, không phải bản tóm tắt do LLM viết; có thể sửa trong mục **Mô tả Markdown** của từng file. File và mô tả vẫn có ở lần mở ứng dụng sau. Bản ZIP không chứa database cá nhân.
 
-Sau khi có tag `approved`, bấm **Đối chiếu**. Chế độ mặc định **LLM gợi ý theo từng tag** gửi toàn bộ text của từng tag (tối đa 30.000 ký tự cho mỗi tag) cùng mô tả Markdown của các file trong thư viện tới OpenAI API. LLM chọn file có thể liên quan và giải thích lý do bằng JSON có cấu trúc. Giao diện hiển thị **tên tag, toàn bộ text tag, file được gợi ý và lý do** riêng cho từng tag. Sau đó ứng dụng đọc nội dung file được chọn và tìm bằng chứng cho từng câu yêu cầu. Bạn cũng có thể chọn **Tôi tự chọn file**, đánh dấu file trong thư viện để đối chiếu mà không gọi OpenAI API. Ứng dụng chỉ lấy câu/hàng bảng có dấu hiệu yêu cầu (`must`, `shall`, `submit`, `provide`, `deadline`, `phải`, `nộp`, v.v.) từ **chunk approved**.
+Sau khi có tag `approved`, bấm **Gợi ý file**. Ứng dụng gửi text của từng tag (tối đa 30.000 ký tự cho mỗi tag) và **một mô tả Markdown cho mỗi file** trong thư viện tới OpenAI API. Model trả danh sách file có thể liên quan kèm lý do. Giao diện hiển thị tên tag, toàn bộ text tag và các file được gợi ý; bạn đánh dấu file muốn giữ. Trong mục **Thêm file khác** của mỗi tag, bạn có thể chọn một file khác đã có trong thư viện hoặc tải thêm PDF/DOCX. File tải thêm được lưu vào thư viện, tự tạo mô tả Markdown và được chọn cho tag đó.
 
-Để bật LLM, nhập OpenAI API key trong ô **Kết nối** của ứng dụng. Key chỉ giữ trong bộ nhớ của phiên chạy, không lưu trong database hoặc JSON. Bạn cũng có thể đặt `OPENAI_API_KEY` trong môi trường trước khi chạy `python app.py`; đổi model bằng `OPENAI_MODEL` (mặc định `gpt-6-luna`). Nếu chưa có key, chế độ thủ công vẫn hoạt động. Cuộc gọi LLM chỉ gửi text tag và mô tả Markdown, không gửi file nhị phân. Mỗi tag được gọi riêng nên thời gian và chi phí phụ thuộc số tag `approved` và độ dài mô tả.
+Để bật gợi ý, đặt biến môi trường `OPEN_AI_API_KEY` trước khi chạy ứng dụng (tên `OPENAI_API_KEY` cũng được hỗ trợ). Key không xuất hiện trong giao diện, database hoặc JSON. Có thể đổi model bằng `OPENAI_MODEL` (mặc định `gpt-6-luna`). Cuộc gọi model chỉ gửi text tag và mô tả Markdown, không gửi file nhị phân. Mỗi tag được gọi riêng nên thời gian và chi phí phụ thuộc số tag `approved` và độ dài mô tả.
 
-Kết quả có ba mức: **Có bằng chứng gần** (điểm ≥ `0.82`), **Cần kiểm tra** (`0.72–<0.82`) và **Chưa tìm thấy** (< `0.72`). Nếu con số trong yêu cầu không xuất hiện trong bằng chứng gần nhất, kết quả sẽ không tự báo là đã khớp. Các mốc này chỉ để sàng lọc và cần điều chỉnh với dữ liệu thật. Mỗi kết quả cho biết câu yêu cầu, tag nguồn, file được chọn, đoạn bằng chứng gần nhất, điểm giống và trang nguồn khi có.
-
-**Có bằng chứng gần** chưa xác nhận bạn đáp ứng yêu cầu; **Chưa tìm thấy** chưa chứng minh chắc chắn file của bạn thiếu thông tin. Hãy kiểm tra bằng mắt, nhất là điều kiện về số lượng, thời hạn, mức kinh nghiệm và phủ định. Bước trích câu yêu cầu và tìm bằng chứng vẫn dùng quy tắc cùng embedding local, có thể bỏ sót yêu cầu không có từ khóa rõ ràng và có thể gợi ý nhầm file khi mô tả Markdown chưa đủ chi tiết.
+Gợi ý chỉ dựa trên mô tả file; nó chưa xác nhận file đáp ứng yêu cầu. Các lựa chọn file được giữ trong phiên trình duyệt hiện tại và có trong JSON xuất ra; thư viện file và mô tả Markdown được lưu ở SQLite.
 
 ## Dữ liệu xuất
 
-JSON có `schema_version: 8`, `documents` chứa toàn bộ chunk, `next_step_tags` chỉ chứa tag `approved`, và `comparison` chứa kết quả đối chiếu nếu đã chạy. Mỗi chunk giữ `file`, `section_path`, `pages`, `blocks` cùng `labels.topics`. Các trường `requirement_model_score`, `requirement_model_tier` lưu điểm/mức máy chấm; `requirement_score`, `requirement_tier` là kết quả sau khi duyệt thủ công; `approved_by_user` phân biệt lựa chọn của bạn.
+JSON có `schema_version: 9`, `documents` chứa toàn bộ chunk, `next_step_tags` chỉ chứa tag `approved`, và `file_suggestions` chứa gợi ý cùng `selected_file_ids` của từng tag nếu đã chạy. Mỗi chunk giữ `file`, `section_path`, `pages`, `blocks` cùng `labels.topics`. Các trường `requirement_model_score`, `requirement_model_tier` lưu điểm/mức máy chấm; `requirement_score`, `requirement_tier` là kết quả sau khi duyệt thủ công; `approved_by_user` phân biệt lựa chọn của bạn.
 
 ## Giới hạn hiện tại
 
@@ -88,5 +86,7 @@ Bố cục dashboard và bảng màu tham khảo nằm trong [design.md](design.
 ## Chạy trên Railway
 
 Railway dùng `Procfile` để chạy `python app.py`. Ứng dụng tự nghe trên `0.0.0.0` và cổng từ biến môi trường `PORT`; khi chạy trên máy cá nhân vẫn dùng `127.0.0.1:8765`. Nếu Railway đã có Start Command riêng, đặt nó thành `python app.py` hoặc bỏ giá trị cũ để Railpack đọc `Procfile`.
+
+GitHub Actions secret `OPEN_AI_API_KEY` không tự chuyển sang Railway. Trong Railway, mở service **Variables**, thêm biến `OPEN_AI_API_KEY` với cùng giá trị và deploy thay đổi. Không đưa giá trị key vào Git hoặc file trong project.
 
 SQLite trong thư mục `data/` là dữ liệu cục bộ của container. Nếu muốn giữ thư viện file và tag qua các lần deploy, cần gắn volume bền vững vào thư mục `data/` của ứng dụng. Giao diện hiện chưa có đăng nhập; chỉ nhập API key và tải tài liệu nhạy cảm khi bạn đã hạn chế quyền truy cập vào service.
