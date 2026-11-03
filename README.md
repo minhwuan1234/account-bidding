@@ -84,3 +84,9 @@ JSON có `schema_version: 8`, `documents` chứa toàn bộ chunk, `next_step_ta
 ## Giao diện
 
 Bố cục dashboard và bảng màu tham khảo nằm trong [design.md](design.md).
+
+## Chạy trên Railway
+
+Railway dùng `Procfile` để chạy `python app.py`. Ứng dụng tự nghe trên `0.0.0.0` và cổng từ biến môi trường `PORT`; khi chạy trên máy cá nhân vẫn dùng `127.0.0.1:8765`. Nếu Railway đã có Start Command riêng, đặt nó thành `python app.py` hoặc bỏ giá trị cũ để Railpack đọc `Procfile`.
+
+SQLite trong thư mục `data/` là dữ liệu cục bộ của container. Nếu muốn giữ thư viện file và tag qua các lần deploy, cần gắn volume bền vững vào thư mục `data/` của ứng dụng. Giao diện hiện chưa có đăng nhập; chỉ nhập API key và tải tài liệu nhạy cảm khi bạn đã hạn chế quyền truy cập vào service.

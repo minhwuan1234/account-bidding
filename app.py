@@ -1,4 +1,4 @@
-"""Local browser interface: python app.py, then open http://127.0.0.1:8765."""
+"""Document dashboard for local use or a hosted HTTP service."""
 
 from __future__ import annotations
 
@@ -103,8 +103,11 @@ class Handler(BaseHTTPRequestHandler):
                 if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
                     raise ValueError("Dữ liệu không hợp lệ")
                 origin = self.headers.get("Origin", "")
-                if origin and origin not in (f"http://127.0.0.1:{self.server.server_port}", f"http://localhost:{self.server.server_port}"):
-                    raise ValueError("Nguồn kết nối không hợp lệ")
+                if origin:
+                    parsed_origin = urlparse(origin)
+                    request_host = self.headers.get("Host", "")
+                    if parsed_origin.scheme not in ("http", "https") or parsed_origin.netloc.lower() != request_host.lower():
+                        raise ValueError("Nguồn kết nối không hợp lệ")
                 size = int(self.headers.get("Content-Length", "0"))
                 if size <= 0 or size > 1024:
                     raise ValueError("API key không hợp lệ")
@@ -189,7 +192,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("STRUCTURAL_CHUNKER_PORT", "8765"))
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"Open http://127.0.0.1:{port} (Ctrl+C to stop)")
+    railway_port = os.environ.get("PORT")
+    port = int(railway_port or os.environ.get("STRUCTURAL_CHUNKER_PORT", "8765"))
+    host = "0.0.0.0" if railway_port else "127.0.0.1"
+    server = ThreadingHTTPServer((host, port), Handler)
+    print(f"Listening on {host}:{port} (Ctrl+C to stop)", flush=True)
     server.serve_forever()
