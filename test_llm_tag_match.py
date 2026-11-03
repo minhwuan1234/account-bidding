@@ -54,13 +54,15 @@ class LLMTagTests(unittest.TestCase):
                     {"file_id": saved["id"], "verdict": "match", "reason": "Có prototype."},
                     {"file_id": "invented", "verdict": "match", "reason": "Invalid ID."},
                 ]}
-                return {"status": "completed", "output": [{"content": [{"type": "output_text", "text": json.dumps(answer)}]}]}
+                return {"status": "completed", "model": "gpt-6-luna", "usage": {"input_tokens": 1000, "output_tokens": 200}, "output": [{"content": [{"type": "output_text", "text": json.dumps(answer)}]}]}
 
             result = match_one_tag([chunk], db_path=db, requester=requester)
             self.assertEqual(result["tag"], "Prototype")
             self.assertIn("must deliver", result["full_text"])
             self.assertEqual([item["file_id"] for item in result["suggestions"]], [saved["id"]])
             self.assertNotIn("comparison", result)
+            self.assertEqual(result["usage"]["input_tokens"], 1000)
+            self.assertAlmostEqual(result["usage"]["estimated_cost_usd"], 0.0002)
 
 
 if __name__ == "__main__":

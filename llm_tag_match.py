@@ -11,6 +11,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from library_store import list_files
+from usage_cost import summarize_usage
 
 
 MODEL = os.environ.get("OPENAI_MODEL", "gpt-6-luna")
@@ -163,4 +164,5 @@ def match_one_tag(chunks: list[dict[str, Any]], *, db_path: Any = None, requeste
         "text_sent_to_model_truncated": len(group["full_text"]) > MAX_TAG_CHARS,
         "suggestions": suggestions,
         "model": MODEL,
+        "usage": summarize_usage(response),
     }

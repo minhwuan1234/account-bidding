@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 from library_store import list_files
 from llm_tag_match import MODEL, openai_request
+from usage_cost import summarize_usage
 
 
 MAX_SOURCE_CHARS = 70_000
@@ -126,4 +127,5 @@ def generate_report(documents: list[dict[str, Any]], matches: list[dict[str, Any
         item["status"] = "review" if item["file_ids"] else "missing"
     report["source_truncated"] = truncated
     report["source_files"] = sorted({chunk.get("file", "") for chunk in chunks if chunk.get("file")})
+    report["usage"] = summarize_usage(response)
     return report

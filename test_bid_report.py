@@ -40,7 +40,7 @@ class BidReportTests(unittest.TestCase):
                     ],
                     "questions": [],
                 }
-                return {"status": "completed", "output": [{"content": [{"type": "output_text", "text": json.dumps(answer)}]}]}
+                return {"status": "completed", "model": "gpt-6-luna", "usage": {"input_tokens": 1000, "output_tokens": 200}, "output": [{"content": [{"type": "output_text", "text": json.dumps(answer)}]}]}
 
             report = generate_report(documents, [], db_path=db, requester=requester)
             self.assertEqual(len(report["requirements"]), 1)
@@ -48,3 +48,4 @@ class BidReportTests(unittest.TestCase):
             self.assertEqual(report["requirements"][0]["status"], "review")
             self.assertEqual(report["scope"][0]["source_chunk_ids"], ["scope"])
             self.assertEqual(report["scope_table"][0]["item"], "Prototype")
+            self.assertAlmostEqual(report["usage"]["estimated_cost_usd"], 0.0002)
