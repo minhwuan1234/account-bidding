@@ -13,7 +13,7 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Chọn một hoặc nhiều PDF/DOCX rồi bấm **Phân tích**. Trong một lần chạy, ứng dụng **chia chunk, suy ra chủ đề và xếp tag vào approved và reject**. Tag Approved tự đi tiếp để gợi ý file; bấm **Xem tag** nếu muốn xem hai nhóm và nội dung chunk. Khi gợi ý hoàn tất, ứng dụng hiện **bản tổng hợp ngay trên màn hình chính** gồm phạm vi công việc, mốc thời gian, yêu cầu nộp và file đối chiếu. **Thư viện file** nằm ở tab riêng. Bạn chọn file muốn dùng rồi bấm **Xuất JSON**. Nhấn `Control+C` trong Terminal để dừng. Khi chạy local, ứng dụng chỉ lắng nghe `127.0.0.1`; bước gợi ý gửi text tag và mô tả Markdown tới OpenAI API.
+Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Chọn một hoặc nhiều PDF/DOCX rồi bấm **Phân tích**. Trong một lần chạy, ứng dụng **chia chunk, suy ra chủ đề và xếp tag vào approved và reject**. Tag Approved tự đi tiếp để gợi ý file. Trong lúc chờ, giao diện hiện một dòng tên các file đang được phân tích; khi hoàn tất, ứng dụng hiện **bản tổng hợp ngay trên màn hình chính** gồm phạm vi công việc, mốc thời gian, yêu cầu nộp và file đối chiếu. **Thư viện file** nằm ở tab riêng. Nhấn `Control+C` trong Terminal để dừng. Khi chạy local, ứng dụng chỉ lắng nghe `127.0.0.1`; bước gợi ý gửi text tag và mô tả Markdown tới OpenAI API.
 
 ### Semantic chunking
 
@@ -22,9 +22,9 @@ Chế độ **Chia theo ngữ nghĩa trong từng mục** được bật mặc �
 ## Thử nhanh
 
 1. Mở tab **Thư viện file**, thêm `samples/sample.pdf` (có thể chọn nhiều file cùng lúc). Ứng dụng tự tạo mô tả Markdown; mở mục **Mô tả Markdown** để xem hoặc sửa.
-2. Quay lại màn hình **Tổng quan bid**, chọn `samples/sample.docx` và bấm **Phân tích** (cũng có thể chọn nhiều file đầu vào cùng lúc). Bấm **Xem tag** để xem ba nhóm; rê chuột vào tag để xem nội dung chunk.
+2. Quay lại màn hình **Tổng quan bid**, chọn `samples/sample.docx` và bấm **Phân tích** (cũng có thể chọn nhiều file đầu vào cùng lúc). Đợi dòng trạng thái phân tích biến mất khi có kết quả.
 3. Cấu hình `OPEN_AI_API_KEY` trên máy chủ. Gợi ý cho các tag `approved` sẽ chạy tự động. Xem text của từng tag, đánh dấu file muốn dùng, hoặc mở **Thêm file khác** để chọn file trong thư viện hay tải PDF/DOCX mới.
-4. Xem bản tổng hợp ngay trên màn hình chính để xem yêu cầu, chọn hoặc tải thêm file cho từng yêu cầu, chỉnh trạng thái và in hoặc lưu PDF. Bấm **Xuất JSON** để lấy toàn bộ kết quả. Chạy kiểm thử bằng `python -m unittest -v`.
+4. Xem bản tổng hợp ngay trên màn hình chính để xem yêu cầu, chọn hoặc tải thêm file cho từng yêu cầu, chỉnh trạng thái và in hoặc lưu PDF. Chạy kiểm thử bằng `python -m unittest -v`.
 
 
 Để thấy sự khác biệt của chế độ semantic, chọn `samples/semantic_sample.docx`. Với ngưỡng `0.85`, ứng dụng tách phần thiết kế và phần thanh toán thành 2 chunk dù chúng nằm dưới cùng một tiêu đề.
@@ -51,13 +51,13 @@ Giao diện chỉ hiện các nhóm tag; nội dung chunk xuất hiện trong kh
 - `approved`: từ `0.50` trở lên, tự đi tiếp.
 - `reject`: dưới `0.50`.
 
-Không cần duyệt thủ công. Popup **Xem tag** chỉ để kiểm tra các tag và đoạn nguồn. Dữ liệu duyệt tag cũ trong SQLite được giữ nguyên nhưng không còn ảnh hưởng điểm chấm.
+Không cần duyệt thủ công. Dữ liệu duyệt tag cũ trong SQLite được giữ nguyên nhưng không còn ảnh hưởng điểm chấm.
 
 ## Thư viện file và gợi ý theo tag
 
 Trong **Thư viện file**, có thể chọn nhiều PDF/DOCX trong một lần và bấm **Lưu file**; ứng dụng lưu từng file riêng. Ứng dụng lưu nguyên file trong SQLite local (`data/tag_examples.sqlite3`) và **tự tạo mô tả Markdown** từ tiêu đề, câu và hàng bảng đại diện trong file. Mô tả này mang tính trích lọc, không phải bản tóm tắt do LLM viết; có thể sửa trong mục **Mô tả Markdown** của từng file. File và mô tả vẫn có ở lần mở ứng dụng sau. Bản ZIP không chứa database cá nhân.
 
-Sau khi có tag `approved` và file trong thư viện, ứng dụng **tự gợi ý file** sau khi phân tích hoặc lưu file mới trong tab thư viện. Ứng dụng gửi text của từng tag (tối đa 30.000 ký tự cho mỗi tag) và **một mô tả Markdown cho mỗi file** trong thư viện tới OpenAI API. Model trả danh sách file có thể liên quan kèm lý do. Mục **File gợi ý theo tag** nằm ở cuối màn hình chính và được thu gọn. Mở từng tag để xem text gốc, file gợi ý và đánh dấu file muốn giữ. Trong mục **Thêm file khác** của mỗi tag, bạn có thể chọn một file khác đã có trong thư viện hoặc tải thêm PDF/DOCX. File tải thêm được lưu vào thư viện, tự tạo mô tả Markdown và được chọn cho tag đó.
+Sau khi có tag `approved` và file trong thư viện, ứng dụng **tự gợi ý file** sau khi phân tích hoặc lưu file mới trong tab thư viện. Ứng dụng gửi text của từng tag (tối đa 30.000 ký tự cho mỗi tag) và **một mô tả Markdown cho mỗi file** trong thư viện tới OpenAI API. Model trả danh sách file có thể liên quan kèm lý do. Mục **File gợi ý theo tag** chỉ xuất hiện ở cuối màn hình chính sau khi bản tổng hợp hoàn tất và được thu gọn. Mở từng tag để xem text gốc, file gợi ý và đánh dấu file muốn giữ. Trong mục **Thêm file khác** của mỗi tag, bạn có thể chọn một file khác đã có trong thư viện hoặc tải thêm PDF/DOCX. File tải thêm được lưu vào thư viện, tự tạo mô tả Markdown và được chọn cho tag đó.
 
 Bản tổng hợp và gợi ý file chỉ dùng các đoạn `approved`; các đoạn `reject` không đi tiếp. Danh sách yêu cầu hiển thị tên, trạng thái và file liên quan; mở từng mục để xem mô tả, nguồn và chỉnh file.
 
@@ -67,7 +67,7 @@ Gợi ý chỉ dựa trên mô tả file; nó chưa xác nhận file đáp ứng
 
 ## Thời gian và chi phí mỗi lần chạy
 
-Nhãn nhỏ ở góc trên màn hình chính chỉ hiển thị thời gian từ lúc bấm **Phân tích** đến khi gợi ý file và bản tổng hợp hoàn tất, cùng chi phí API ước tính bằng USD. Mỗi lần bấm **Tạo lại** cũng được ghi thành một lượt riêng. Số lượt gọi model, token vào/ra và các lượt trước được giữ trong phiên trang hiện tại và kèm trong JSON xuất ra. Phân tích embedding local không phát sinh chi phí OpenAI API.
+Thời gian từ lúc bấm **Phân tích** đến khi gợi ý file và bản tổng hợp hoàn tất, cùng chi phí API ước tính bằng USD, vẫn được tính nội bộ nhưng không hiển thị trên màn hình chính. Mỗi lần bấm **Tạo lại** cũng được ghi thành một lượt riêng. Số lượt gọi model, token vào/ra và các lượt trước được giữ trong phiên trang hiện tại và kèm trong JSON xuất ra. Phân tích embedding local không phát sinh chi phí OpenAI API.
 
 Chi phí được tính từ trường `usage` của từng phản hồi OpenAI Responses API. Với `gpt-6-luna` Standard, ứng dụng dùng đơn giá [$0,10/1 triệu token đầu vào, $0,01/1 triệu token đầu vào được cache, $0,125/1 triệu token ghi cache và $0,50/1 triệu token đầu ra](https://developers.openai.com/api/docs/models/gpt-6-luna). Nếu đổi sang model khác hoặc API không trả đủ dữ liệu, giao diện báo **Chưa xác định** thay vì hiển thị $0. Đây là ước tính, không phải số tiền thanh toán cuối cùng.
 
