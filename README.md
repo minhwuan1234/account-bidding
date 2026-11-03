@@ -19,7 +19,9 @@ Phần **Phạm vi công việc** luôn có sáu mục: mục tiêu chính của
 
 Phần **Các mốc** có một lượt đọc `gpt-6-luna` riêng chạy cùng lúc với các mục trên. Mốc có ngày đầy đủ được trình bày theo ngày/tháng/năm, giữ nguyên giờ và múi giờ trong tài liệu; thẻ trạng thái cho biết đã qua, hôm nay hay sắp tới. Mốc chỉ ghi thời hạn tương đối sẽ không bị gán một ngày tự suy đoán.
 
-Cuối bản tổng hợp, **Câu hỏi nháp** hiện dưới dạng gạch đầu dòng khi thiếu bằng chứng về mục tiêu dự án, đối tượng xem/học/sử dụng, deadline hoàn thành dự án, cách nộp thầu hoặc phạm vi công việc. Mục đã có thông tin sẽ không sinh câu hỏi.
+Trước phần **Tài liệu cần nộp**, **Câu hỏi nháp** hiện dưới dạng gạch đầu dòng khi thiếu bằng chứng về mục tiêu dự án, đối tượng xem/học/sử dụng, deadline hoàn thành dự án, cách nộp thầu hoặc phạm vi công việc. Mục đã có thông tin sẽ không sinh câu hỏi.
+
+Phần **Tài liệu cần nộp** có lượt đọc Luna riêng quét toàn bộ tài liệu đầu vào theo từng phần, gồm cả đoạn bị xếp tag `reject`, để tìm từng giấy tờ phải nộp trong đoạn văn và bảng. Các yêu cầu trùng tên được gộp lại; mục không có nguồn hợp lệ bị loại. Lượt đọc này chạy cùng lúc với các mục SOW và các mốc.
 
 ### Semantic chunking
 
@@ -65,11 +67,11 @@ Trong **Thư viện file**, có thể chọn nhiều PDF/DOCX trong một lần 
 
 Sau khi có tag `approved` và file trong thư viện, ứng dụng **tự gợi ý file** sau khi phân tích hoặc lưu file mới trong tab thư viện. Ứng dụng gửi text của từng tag (tối đa 30.000 ký tự cho mỗi tag) và **một mô tả Markdown cho mỗi file** trong thư viện tới OpenAI API. Model trả danh sách file có thể liên quan kèm lý do. Mục **File gợi ý theo tag** chỉ xuất hiện ở cuối màn hình chính sau khi bản tổng hợp hoàn tất và được thu gọn. Mở từng tag để xem text gốc, file gợi ý và đánh dấu file muốn giữ. Trong mục **Thêm file khác** của mỗi tag, bạn có thể chọn một file khác đã có trong thư viện hoặc tải thêm PDF/DOCX. File tải thêm được lưu vào thư viện, tự tạo mô tả Markdown và được chọn cho tag đó.
 
-Bản tổng hợp và gợi ý file chỉ dùng các đoạn `approved`; các đoạn `reject` không đi tiếp. Danh sách yêu cầu hiển thị tên, trạng thái và file liên quan; mở từng mục để xem mô tả, nguồn và chỉnh file.
+Gợi ý file theo tag dùng các đoạn `approved`. Phần **Tài liệu cần nộp** quét cả các đoạn `reject` để không bỏ sót giấy tờ do bước phân loại tag; danh sách hiển thị tên, trạng thái và file liên quan, có thể mở từng mục để xem nguồn và chỉnh file.
 
 Để bật gợi ý trên máy cá nhân, mở `local_api_key.py` và dán key vào dòng `OPEN_AI_API_KEY = "..."`, sau đó tải lại trang. Nếu cài từ Git hoặc ZIP và chưa có file này, sao chép `local_api_key.example.py` thành `local_api_key.py` trước. File chứa key được Git bỏ qua và không nằm trong bản ZIP. Bạn cũng có thể đặt biến môi trường `OPEN_AI_API_KEY` trước khi chạy ứng dụng (tên `OPENAI_API_KEY` cũng được hỗ trợ); biến môi trường được ưu tiên. Key không xuất hiện trong giao diện, database hoặc JSON. Có thể đổi model bằng `OPENAI_MODEL` (mặc định `gpt-6-luna`). Các lượt gọi model gửi văn bản các đoạn tài liệu và mô tả Markdown, không gửi file nhị phân. Mỗi tag được gợi ý riêng; thời gian và chi phí phụ thuộc số tag và độ dài tài liệu.
 
-Gợi ý chỉ dựa trên mô tả file; nó chưa xác nhận file đáp ứng yêu cầu. Bản tổng hợp trên màn hình chính dùng LLM để tổng hợp phạm vi, thời hạn và yêu cầu từ chunk Approved, liên kết từng yêu cầu với file có thể phù hợp. Bạn có thể chọn/bỏ file, tải thêm file và chỉnh trạng thái từng yêu cầu. Các lựa chọn ở bản tổng hợp được giữ trong phiên trình duyệt và trong JSON xuất ra; thư viện file và mô tả Markdown được lưu ở SQLite.
+Gợi ý chỉ dựa trên mô tả file; nó chưa xác nhận file đáp ứng yêu cầu. Bản tổng hợp trên màn hình chính dùng LLM để đọc các phần của tài liệu đầu vào và liên kết từng yêu cầu với file có thể phù hợp. Bạn có thể chọn/bỏ file và tải thêm file. Các lựa chọn ở bản tổng hợp được giữ trong phiên trình duyệt và trong JSON xuất ra; thư viện file và mô tả Markdown được lưu ở SQLite.
 
 ## Thời gian và chi phí mỗi lần chạy
 
