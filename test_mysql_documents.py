@@ -32,3 +32,15 @@ class MySQLDocumentTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "write failed"):
                 mysql_documents.save_document("library", "book.pdf", b"bytes", "# Book")
         connection.rollback.assert_called_once()
+
+    def test_unchanged_summary_still_counts_as_saved(self):
+        connection = MagicMock()
+        connection.__enter__.return_value = connection
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.rowcount = 0
+        cursor.fetchone.return_value = (1,)
+        with patch("database.mysql_documents.connect", return_value=connection), \
+             patch("database.mysql_documents._ensure_schema"):
+            self.assertTrue(mysql_documents.update_summary("library", "existing-id", "# Existing"))
+        self.assertEqual(cursor.execute.call_count, 2)
+        connection.commit.assert_called_once()

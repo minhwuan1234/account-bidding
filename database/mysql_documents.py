@@ -114,6 +114,12 @@ def update_summary(kind: str, document_id: str, summary_md: str) -> bool:
                 (summary_md, kind, document_id),
             )
             updated = cursor.rowcount > 0
+            if not updated:
+                cursor.execute(
+                    "SELECT 1 FROM uploaded_documents WHERE kind = %s AND id = %s",
+                    (kind, document_id),
+                )
+                updated = cursor.fetchone() is not None
         connection.commit()
     return updated
 
