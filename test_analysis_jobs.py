@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import analysis_jobs
+import business.analysis_jobs as analysis_jobs
 
 
 class AnalysisJobTests(unittest.TestCase):
@@ -21,7 +21,7 @@ class AnalysisJobTests(unittest.TestCase):
             return {"file": Path(path).name, "chunk_count": 2}
 
         try:
-            with patch("analysis_jobs.chunk_file", side_effect=slow_analysis):
+            with patch("business.analysis_jobs.chunk_file", side_effect=slow_analysis):
                 job_id = analysis_jobs.submit("sample.docx", b"sample document", True, 0.85)
                 self.assertTrue(started.wait(3))
                 self.assertEqual(analysis_jobs.get(job_id)["status"], "running")

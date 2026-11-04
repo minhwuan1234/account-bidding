@@ -194,13 +194,13 @@ def chunk_file(path: str | Path, *, semantic: bool = False, threshold: float = 0
         raise ValueError("Only PDF and DOCX files are supported")
     chunks = make_chunks(blocks, path.name)
     if semantic:
-        from semantic import split_semantic
+        from business.semantic import split_semantic
 
         chunks = split_semantic(chunks, threshold=threshold, embedder=embedder)
-    from labels import attach_labels
+    from business.labels import attach_labels
 
     chunks = attach_labels(chunks, embedder=embedder)
-    from requirements_filter import mark_requirement_candidates
+    from business.requirements_filter import mark_requirement_candidates
 
     chunks = mark_requirement_candidates(chunks, embedder=embedder)
     return {"file": path.name, "format": suffix[1:], "mode": "semantic" if semantic else "structural", "chunk_count": len(chunks), "chunks": chunks}

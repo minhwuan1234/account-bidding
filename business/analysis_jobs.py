@@ -9,7 +9,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from chunker import chunk_file
+from business.chunker import chunk_file
 
 
 _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="document-analysis")

@@ -1,5 +1,24 @@
 # Structural Chunker (bản local)
 
+## Cấu trúc mã nguồn
+
+```text
+app.py                 Điểm khởi chạy
+frontend/              HTML, CSS, JavaScript và HTTP handler
+business/              Đọc tài liệu, chunking, tag, gợi ý file, tạo báo cáo
+database/              SQLite hiện tại và kết nối Railway MySQL
+data/                  SQLite local (không đưa lên Git)
+test_*.py              Bài kiểm tra
+```
+
+Luồng phụ thuộc: `frontend → business → database`. `app.py` chỉ khởi chạy máy chủ. File tĩnh được phục vụ từ `frontend/` qua `/app.js`, `/styles.css` và `/favicon.svg`.
+
+### Kết nối Railway MySQL
+
+Ứng dụng nhận `MYSQL_URL` từ service Railway, hoặc bộ biến `MYSQLHOST`, `MYSQLPORT`, `MYSQLUSER`, `MYSQLPASSWORD`, `MYSQLDATABASE`. Trong Railway, thêm biến tham chiếu từ MySQL service vào **service ứng dụng** (ví dụ `MYSQL_URL=${{MySQL.MYSQL_URL}}`). Gọi `GET /api/database-status` để thử kết nối bằng `SELECT 1`; phản hồi chỉ có `configured` và `connected`, không trả về mật khẩu.
+
+**Phạm vi bước này:** MySQL mới được nối và kiểm tra kết nối. File thư viện và tag vẫn đọc/ghi trong SQLite hiện tại; chưa tạo bảng hay di chuyển dữ liệu sang MySQL. Nếu chạy local không có biến MySQL, endpoint trả về `{"configured": false, "connected": false}` và các tính năng hiện tại vẫn chạy.
+
 Ứng dụng Python chia PDF/DOCX theo cấu trúc tài liệu. Mỗi chunk gồm nội dung dưới **một tiêu đề gần nhất** cho đến tiêu đề kế tiếp, kèm đường dẫn mục, tên file và trang PDF. Bảng được giữ dưới dạng hàng/cột trong JSON. Chia tiếp theo ngữ nghĩa được bật mặc định; chủ đề của mỗi chunk được chọn từ chính nội dung chunk bằng embedding local. Sau đó ứng dụng chấm **tag chủ đề** và xếp chúng vào ba mức để quyết định tag nào đi tiếp. Không có giới hạn 500 token cho chunk. Phân tích và gợi ý chủ đề chạy local; bước gợi ý file và tạo bản tổng hợp dùng OpenAI API khi máy chủ có API key.
 
 ## Cài và chạy trên macOS
@@ -15,13 +34,13 @@ python app.py
 
 Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Thả một hoặc nhiều PDF/DOCX vào ô đầu trang hoặc bấm vào ô để chọn, sau đó bấm nút xanh **Phân tích tài liệu** để xác nhận chạy. Trong một lần chạy, ứng dụng **chia chunk, suy ra chủ đề và xếp tag vào approved và reject**. Tag Approved tự đi tiếp để gợi ý file. Trong lúc chờ, giao diện hiện một dòng tên các file đang được phân tích; khi hoàn tất, ứng dụng hiện **bản tổng hợp ngay trên màn hình chính** gồm phạm vi công việc, mốc thời gian, yêu cầu nộp và file đối chiếu. **Thư viện file** nằm ở tab riêng. Nhấn `Control+C` trong Terminal để dừng. Khi chạy local, ứng dụng chỉ lắng nghe `127.0.0.1`; bước gợi ý gửi text tag và mô tả Markdown tới OpenAI API.
 
-Phần **Phạm vi công việc** luôn có sáu mục: mục tiêu chính của project, hình thức hợp đồng, bên cung cấp nội dung chuyên môn, hình thức nộp thầu, cách chấm điểm và đánh giá hồ sơ, và chi tiết cùng khối lượng công việc. Mỗi mục dùng một lượt đọc `gpt-6-luna` riêng; sáu lượt chạy đồng thời và chỉ lấy thông tin từ các đoạn tài liệu đầu vào. Mục không có bằng chứng sẽ hiện “Hồ sơ không nêu rõ.” Khối lượng và tỷ trọng điểm không được tự suy đoán.
+Phần **Phạm vi công việc** luôn có sáu mục: mục tiêu chính của project, hình thức hợp đồng, bên cung cấp nội dung chuyên môn, hình thức nộp thầu, cách chấm điểm và đánh giá hồ sơ, và chi tiết cùng khối lượng công việc. Các mục dùng `gpt-6-luna` và chạy đồng thời. Riêng mục cách chấm điểm quét toàn bộ tài liệu theo các đợt nhỏ, kể cả chunk bị tag reject; từng quy tắc xét chọn phải có câu trích nguyên văn từ nguồn. Mục không có bằng chứng sẽ hiện “Hồ sơ không nêu rõ.” Khối lượng và tỷ trọng điểm không được tự suy đoán.
 
-Phần **Các mốc** có một lượt đọc `gpt-6-luna` riêng chạy cùng lúc với các mục trên. Mốc có ngày đầy đủ được trình bày theo ngày/tháng/năm, giữ nguyên giờ và múi giờ trong tài liệu; thẻ trạng thái cho biết đã qua, hôm nay hay sắp tới. Mốc chỉ ghi thời hạn tương đối sẽ không bị gán một ngày tự suy đoán.
+Phần **Các mốc** có một lượt đọc `gpt-6-luna` riêng chạy cùng lúc với các mục trên. Model nhận diện ngày gốc và quan hệ như “5 ngày trước hạn nộp”; ứng dụng tính ra ngày/tháng/năm bằng lịch nếu ngày gốc có đủ năm. Giờ và múi giờ của ngày ghi trực tiếp được giữ nguyên, không tự chuyển sang mốc tính toán. Với thời hạn “2 ngày sau khi nhận câu hỏi”, ngày suy ra từ hạn gửi câu hỏi được gắn nhãn **Theo điều kiện** và ghi rõ giả định nhận câu hỏi đúng ngày hạn gửi. Nếu thiếu ngày gốc, ứng dụng giữ nguyên thời hạn tương đối.
 
 Trước phần **Tài liệu cần nộp**, **Câu hỏi nháp** hiện dưới dạng gạch đầu dòng khi thiếu bằng chứng về mục tiêu dự án, đối tượng xem/học/sử dụng, deadline hoàn thành dự án, cách nộp thầu hoặc phạm vi công việc. Mục đã có thông tin sẽ không sinh câu hỏi.
 
-Phần **Tài liệu cần nộp** có lượt đọc Luna riêng quét toàn bộ tài liệu đầu vào theo từng phần, gồm cả đoạn bị xếp tag `reject`, để tìm từng giấy tờ phải nộp trong đoạn văn và bảng. Các yêu cầu trùng tên được gộp lại; mục không có nguồn hợp lệ bị loại. Lượt đọc này chạy cùng lúc với các mục SOW và các mốc.
+Phần **Tài liệu cần nộp** có lượt đọc Luna riêng quét toàn bộ tài liệu đầu vào theo từng phần, gồm cả đoạn bị xếp tag `reject`, để tìm từng giấy tờ phải nộp trong đoạn văn và bảng. Chỉ có hai nhóm cố định: **Hồ sơ công ty** (pháp lý, năng lực công ty/nhân sự, CV, kinh nghiệm, sản phẩm và dịch vụ) và **Proposal** (đề xuất cho dự án, kế hoạch, timeline, báo giá). Sau khi lọc các mục không có câu nguồn nguyên văn, một lượt Luna rà soát tên tương đương, gộp mục trùng và phân loại lại; mục nào bị lượt rà soát bỏ sót vẫn được giữ. Các lượt đọc tài liệu chạy cùng lúc với các mục SOW và các mốc.
 
 ### Semantic chunking
 
@@ -67,7 +86,7 @@ Trong **Thư viện file**, có thể chọn nhiều PDF/DOCX trong một lần 
 
 Sau khi có tag `approved` và file trong thư viện, ứng dụng **tự gợi ý file** sau khi phân tích hoặc lưu file mới trong tab thư viện. Ứng dụng gửi text của từng tag (tối đa 30.000 ký tự cho mỗi tag) và **một mô tả Markdown cho mỗi file** trong thư viện tới OpenAI API. Model trả danh sách file có thể liên quan kèm lý do. Mục **File gợi ý theo tag** chỉ xuất hiện ở cuối màn hình chính sau khi bản tổng hợp hoàn tất và được thu gọn. Mở từng tag để xem text gốc, file gợi ý và đánh dấu file muốn giữ. Trong mục **Thêm file khác** của mỗi tag, bạn có thể chọn một file khác đã có trong thư viện hoặc tải thêm PDF/DOCX. File tải thêm được lưu vào thư viện, tự tạo mô tả Markdown và được chọn cho tag đó.
 
-Gợi ý file theo tag dùng các đoạn `approved`. Phần **Tài liệu cần nộp** quét cả các đoạn `reject` để không bỏ sót giấy tờ do bước phân loại tag; danh sách hiển thị tên, trạng thái và file liên quan, có thể mở từng mục để xem nguồn và chỉnh file.
+Gợi ý file theo tag dùng các đoạn `approved`. Phần **Tài liệu cần nộp** quét cả các đoạn `reject` để không bỏ sót giấy tờ do bước phân loại tag; hai cột cố định hiển thị tên, trạng thái và file liên quan, có thể mở từng mục để xem nguồn và chỉnh file. Bố cục giữ đúng hai cột.
 
 Để bật gợi ý trên máy cá nhân, mở `local_api_key.py` và dán key vào dòng `OPEN_AI_API_KEY = "..."`, sau đó tải lại trang. Nếu cài từ Git hoặc ZIP và chưa có file này, sao chép `local_api_key.example.py` thành `local_api_key.py` trước. File chứa key được Git bỏ qua và không nằm trong bản ZIP. Bạn cũng có thể đặt biến môi trường `OPEN_AI_API_KEY` trước khi chạy ứng dụng (tên `OPENAI_API_KEY` cũng được hỗ trợ); biến môi trường được ưu tiên. Key không xuất hiện trong giao diện, database hoặc JSON. Có thể đổi model bằng `OPENAI_MODEL` (mặc định `gpt-6-luna`). Các lượt gọi model gửi văn bản các đoạn tài liệu và mô tả Markdown, không gửi file nhị phân. Mỗi tag được gợi ý riêng; thời gian và chi phí phụ thuộc số tag và độ dài tài liệu.
 

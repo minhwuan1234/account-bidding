@@ -1,6 +1,6 @@
 import unittest
 
-from usage_cost import summarize_usage
+from business.usage_cost import summarize_usage
 
 
 class UsageCostTests(unittest.TestCase):

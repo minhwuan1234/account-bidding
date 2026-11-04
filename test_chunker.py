@@ -4,10 +4,10 @@ from tempfile import TemporaryDirectory
 
 from docx import Document
 
-from chunker import Block, chunk_file, make_chunks
-from labels import attach_labels
-from requirements_filter import NEGATIVE, POSITIVE, mark_requirement_candidates, tier_for
-from semantic import split_semantic
+from business.chunker import Block, chunk_file, make_chunks
+from business.labels import attach_labels
+from business.requirements_filter import NEGATIVE, POSITIVE, mark_requirement_candidates, tier_for
+from business.semantic import split_semantic
 
 
 SAMPLES = Path(__file__).parent / "samples"
@@ -140,7 +140,7 @@ class ChunkerTests(unittest.TestCase):
         self.assertTrue(fake.normalized)
 
     def test_requirement_tiers_use_tag_scores_without_manual_feedback(self):
-        from tag_store import save_approved
+        from database.tag_store import save_approved
 
         class FakeEmbedder:
             def encode(self, texts, normalize_embeddings=False):

@@ -10,8 +10,8 @@ from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from library_store import list_files
-from usage_cost import summarize_usage
+from database.library_store import list_files
+from business.usage_cost import summarize_usage
 
 
 MODEL = os.environ.get("OPENAI_MODEL", "gpt-6-luna")
@@ -20,7 +20,7 @@ def api_key() -> str:
     environment_key = os.environ.get("OPEN_AI_API_KEY", "").strip() or os.environ.get("OPENAI_API_KEY", "").strip()
     if environment_key:
         return environment_key
-    local_config = Path(__file__).with_name("local_api_key.py")
+    local_config = Path(__file__).resolve().parent.parent / "local_api_key.py"
     if not local_config.exists():
         return ""
     try:

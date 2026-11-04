@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from semantic import _cosine, local_model
+from business.semantic import _cosine, local_model
 
 
 POSITIVE = [

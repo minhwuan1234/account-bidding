@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from tag_store import database_path
+from database.tag_store import database_path
 
 
 MAX_FILE_BYTES = 30 * 1024 * 1024
@@ -71,4 +71,11 @@ def update_description(file_id: str, description_md: str, path: Path | None = No
         raise ValueError("Mô tả Markdown phải có 1–4000 ký tự")
     with _connect(path) as connection:
         cursor = connection.execute("UPDATE library_files SET description_md = ? WHERE id = ?", (description_md, file_id))
+    return cursor.rowcount > 0
+
+
+def delete_file(file_id: str, path: Path | None = None) -> bool:
+    """Remove one library entry by its ID, including its stored file contents."""
+    with _connect(path) as connection:
+        cursor = connection.execute("DELETE FROM library_files WHERE id = ?", (file_id,))
     return cursor.rowcount > 0

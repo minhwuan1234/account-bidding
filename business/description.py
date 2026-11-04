@@ -5,8 +5,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from chunker import docx_blocks, pdf_blocks
-from semantic import SENTENCE_END
+from business.chunker import docx_blocks, pdf_blocks
+from business.semantic import SENTENCE_END
 
 
 SALIENT = re.compile(

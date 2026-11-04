@@ -9,10 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from semantic import MODEL_ID
-
-
-DEFAULT_DB = Path(__file__).parent / "data" / "tag_examples.sqlite3"
+MODEL_ID = "intfloat/multilingual-e5-small"
+DEFAULT_DB = Path(__file__).resolve().parent.parent / "data" / "tag_examples.sqlite3"
 
 
 def database_path() -> Path:

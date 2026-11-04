@@ -14,7 +14,7 @@ from typing import Any
 
 import numpy as np
 
-from semantic import SENTENCE_END, local_model
+from business.semantic import SENTENCE_END, local_model
 
 
 WORD = re.compile(r"[^\W_]+(?:[-’'][^\W_]+)*", re.UNICODE)
