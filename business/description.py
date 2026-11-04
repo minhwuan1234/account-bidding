@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from business.chunker import docx_blocks, pdf_blocks
+from business.chunker import Block, docx_blocks, pdf_blocks
 from business.semantic import SENTENCE_END
 
 
@@ -26,6 +26,11 @@ def describe_file(path: str | Path) -> str:
         blocks = docx_blocks(path)
     else:
         raise ValueError("Chỉ hỗ trợ PDF và DOCX")
+    return describe_blocks(blocks, path.name)
+
+
+def describe_blocks(blocks: list[Block], filename: str) -> str:
+    """Summarize blocks already extracted by chunking without reading the file again."""
     headings = []
     snippets = []
     for block in blocks:
@@ -50,7 +55,7 @@ def describe_file(path: str | Path) -> str:
     for text in (salient[:8] + clean[:5]):
         if text not in selected:
             selected.append(text)
-    lines = [f"# {path.name}"]
+    lines = [f"# {filename}"]
     if headings:
         lines += ["", "## Các mục trong file"] + [f"- {text[:160]}" for text in headings[:12]]
     if selected:

@@ -6,7 +6,7 @@
 app.py                 Điểm khởi chạy
 frontend/              HTML, CSS, JavaScript và HTTP handler
 business/              Đọc tài liệu, chunking, tag, gợi ý file, tạo báo cáo
-database/              SQLite hiện tại và kết nối Railway MySQL
+database/              Lưu file trong MySQL trên Railway hoặc SQLite local
 data/                  SQLite local (không đưa lên Git)
 test_*.py              Bài kiểm tra
 ```
@@ -17,7 +17,9 @@ Luồng phụ thuộc: `frontend → business → database`. `app.py` chỉ kh�
 
 Ứng dụng nhận `MYSQL_URL` từ service Railway, hoặc bộ biến `MYSQLHOST`, `MYSQLPORT`, `MYSQLUSER`, `MYSQLPASSWORD`, `MYSQLDATABASE`. Trong Railway, thêm biến tham chiếu từ MySQL service vào **service ứng dụng** (ví dụ `MYSQL_URL=${{MySQL.MYSQL_URL}}`). Gọi `GET /api/database-status` để thử kết nối bằng `SELECT 1`; phản hồi chỉ có `configured` và `connected`, không trả về mật khẩu.
 
-**Phạm vi bước này:** MySQL mới được nối và kiểm tra kết nối. File thư viện và tag vẫn đọc/ghi trong SQLite hiện tại; chưa tạo bảng hay di chuyển dữ liệu sang MySQL. Nếu chạy local không có biến MySQL, endpoint trả về `{"configured": false, "connected": false}` và các tính năng hiện tại vẫn chạy.
+Khi chạy trên Railway, mọi PDF/DOCX tải lên để **phân tích RFP** hoặc thêm vào **Thư viện file** được lưu trong MySQL cùng tóm tắt nội dung. Bản gốc được chia thành các phần nhị phân tối đa 1 MiB để ghi trong một giao dịch; bảng được tạo tự động lần đầu. RFP được lưu ngay khi nhận upload và được cập nhật tóm tắt khi bắt đầu phân tích. Nếu chưa trích xuất được chữ, tóm tắt ghi rõ cần kiểm tra/OCR. Nếu Railway thiếu cấu hình MySQL, upload báo lỗi thay vì ghi vào SQLite tạm.
+
+Trên máy local không có biến MySQL, ứng dụng tiếp tục lưu vào SQLite `data/tag_examples.sqlite3`. Endpoint `/api/database-status` khi đó trả `{"configured": false, "connected": false}`. Tag mẫu vẫn dùng SQLite. **File đã lưu trong SQLite trước đây không tự chuyển sang MySQL**; cần tải lại lên Railway nếu muốn đưa chúng vào database đó.
 
 Ứng dụng Python chia PDF/DOCX theo cấu trúc tài liệu. Mỗi chunk gồm nội dung dưới **một tiêu đề gần nhất** cho đến tiêu đề kế tiếp, kèm đường dẫn mục, tên file và trang PDF. Bảng được giữ dưới dạng hàng/cột trong JSON. Chia tiếp theo ngữ nghĩa được bật mặc định; chủ đề của mỗi chunk được chọn từ chính nội dung chunk bằng embedding local. Sau đó ứng dụng chấm **tag chủ đề** và xếp chúng vào ba mức để quyết định tag nào đi tiếp. Không có giới hạn 500 token cho chunk. Phân tích và gợi ý chủ đề chạy local; bước gợi ý file và tạo bản tổng hợp dùng OpenAI API khi máy chủ có API key.
 
@@ -82,7 +84,7 @@ Không cần duyệt thủ công. Dữ liệu duyệt tag cũ trong SQLite đư�
 
 ## Thư viện file và gợi ý theo tag
 
-Trong **Thư viện file**, có thể chọn nhiều PDF/DOCX trong một lần và bấm **Lưu file**; ứng dụng lưu từng file riêng. Ứng dụng lưu nguyên file trong SQLite local (`data/tag_examples.sqlite3`) và **tự tạo mô tả Markdown** từ tiêu đề, câu và hàng bảng đại diện trong file. Mô tả này mang tính trích lọc, không phải bản tóm tắt do LLM viết; có thể sửa trong mục **Mô tả Markdown** của từng file. File và mô tả vẫn có ở lần mở ứng dụng sau. Bản ZIP không chứa database cá nhân.
+Trong **Thư viện file**, có thể chọn nhiều PDF/DOCX trong một lần và bấm **Lưu file**; ứng dụng lưu từng file riêng cùng **tóm tắt Markdown** trích từ tiêu đề, câu và hàng bảng đại diện. Đây là bản tóm tắt trích lọc, không phải bản do LLM viết; có thể sửa trong mục **Tóm tắt nội dung tài liệu**. File và tóm tắt vẫn có ở lần mở ứng dụng sau. Trên Railway chúng nằm trong MySQL, còn bản local mặc định dùng SQLite. Bản ZIP không chứa database cá nhân.
 
 Sau khi có tag `approved` và file trong thư viện, ứng dụng **tự gợi ý file** sau khi phân tích hoặc lưu file mới trong tab thư viện. Ứng dụng gửi text của từng tag (tối đa 30.000 ký tự cho mỗi tag) và **một mô tả Markdown cho mỗi file** trong thư viện tới OpenAI API. Model trả danh sách file có thể liên quan kèm lý do. Mục **File gợi ý theo tag** chỉ xuất hiện ở cuối màn hình chính sau khi bản tổng hợp hoàn tất và được thu gọn. Mở từng tag để xem text gốc, file gợi ý và đánh dấu file muốn giữ. Trong mục **Thêm file khác** của mỗi tag, bạn có thể chọn một file khác đã có trong thư viện hoặc tải thêm PDF/DOCX. File tải thêm được lưu vào thư viện, tự tạo mô tả Markdown và được chọn cho tag đó.
 

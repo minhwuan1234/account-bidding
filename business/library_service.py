@@ -10,14 +10,17 @@ from database.library_store import add_file, delete_file, list_files, update_des
 
 
 def add_document(filename: str, content: bytes) -> dict:
-    """Describe and save one document in the current SQLite library."""
+    """Describe and save one document in the configured database."""
     filename = Path(filename).name
     if Path(filename).suffix.lower() not in {".pdf", ".docx"}:
         raise ValueError("Chỉ hỗ trợ PDF và DOCX")
     with tempfile.TemporaryDirectory() as folder:
         path = Path(folder) / filename
         path.write_bytes(content)
-        description = describe_file(path)
+        try:
+            description = describe_file(path)
+        except Exception:
+            description = f"# {filename}\n\nKhông trích xuất được nội dung. Cần kiểm tra file hoặc OCR."
     return add_file(filename, content, description)
 
 

@@ -6,7 +6,7 @@ import re
 import statistics
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 HEADING_NUMBER = re.compile(r"^(?P<number>(?:\d+|[IVXLC]+)(?:\.\d+)*)(?:[.\)]|\s)[ \t]*(?P<title>\S.*)$", re.I)
@@ -183,7 +183,8 @@ def make_chunks(blocks: list[Block], filename: str) -> list[dict[str, Any]]:
     return chunks
 
 
-def chunk_file(path: str | Path, *, semantic: bool = False, threshold: float = 0.85, embedder: Any = None) -> dict[str, Any]:
+def chunk_file(path: str | Path, *, semantic: bool = False, threshold: float = 0.85,
+               embedder: Any = None, on_blocks: Callable[[list[Block]], None] | None = None) -> dict[str, Any]:
     path = Path(path)
     suffix = path.suffix.lower()
     if suffix == ".pdf":
@@ -192,6 +193,8 @@ def chunk_file(path: str | Path, *, semantic: bool = False, threshold: float = 0
         blocks = docx_blocks(path)
     else:
         raise ValueError("Only PDF and DOCX files are supported")
+    if on_blocks is not None:
+        on_blocks(blocks)
     chunks = make_chunks(blocks, path.name)
     if semantic:
         from business.semantic import split_semantic

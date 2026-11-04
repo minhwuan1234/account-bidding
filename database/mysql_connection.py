@@ -1,4 +1,4 @@
-"""Railway MySQL connectivity only; application data is not migrated yet."""
+"""Railway MySQL connection settings and health check."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ def connection_options() -> dict[str, object] | None:
             "password": os.environ.get("MYSQLPASSWORD", ""),
             "database": database,
         }
-    return {**options, "charset": "utf8mb4", "connect_timeout": 3, "read_timeout": 3, "write_timeout": 3}
+    return {**options, "charset": "utf8mb4", "connect_timeout": 5, "read_timeout": 30, "write_timeout": 30}
 
 
 def connect():

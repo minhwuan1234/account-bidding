@@ -15,6 +15,7 @@ from business.chunker import chunk_file
 from business.library_service import add_document, delete_document, list_documents, update_document_description
 from business.llm_tag_match import MODEL, has_api_key, match_one_tag
 from business.system_service import database_status
+from business.upload_service import receive_rfp, summarize_rfp
 
 MAX_UPLOAD = 30 * 1024 * 1024
 ASSETS = Path(__file__).resolve().parent
@@ -59,7 +60,10 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(200, json.dumps({"ready": ready, "model": MODEL}).encode(), "application/json; charset=utf-8")
             return
         if self.path == "/api/library":
-            self.respond(200, json.dumps({"files": list_documents()}, ensure_ascii=False).encode(), "application/json; charset=utf-8")
+            try:
+                self.respond_json(200, {"files": list_documents()})
+            except Exception as exc:
+                self.respond_json(503, {"error": str(exc)})
             return
         if self.path != "/":
             self.send_error(404)
@@ -113,10 +117,13 @@ class Handler(BaseHTTPRequestHandler):
     def post_chunk(self, url):
         filename, semantic, threshold = self.file_options(url)
         body = self.read_body()
+        stored = receive_rfp(filename, body)
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / filename
             path.write_bytes(body)
+            summarize_rfp(stored["id"], path)
             result = chunk_file(path, semantic=semantic, threshold=threshold)
+        result["stored_document_id"] = stored["id"]
         self.respond_json(200, result)
 
     def post_library(self, url):
