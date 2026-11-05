@@ -507,7 +507,7 @@ def _source_chunks(chunks: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], 
 
 
 def build_request(chunks: list[dict[str, Any]], matches: list[dict[str, Any]], files: list[dict[str, Any]]) -> tuple[dict[str, Any], bool]:
-    source, truncated = _source_chunks([chunk for chunk in chunks if chunk.get("requirement_tier") == "approved"])
+    source, truncated = _source_chunks(chunks)
     payload = {
         "source_chunks": source,
     }
@@ -521,9 +521,8 @@ def build_request(chunks: list[dict[str, Any]], matches: list[dict[str, Any]], f
 def generate_report(documents: list[dict[str, Any]], matches: list[dict[str, Any]], *,
                     db_path: Any = None, requester: Callable[[dict[str, Any]], dict[str, Any]] = openai_request) -> dict[str, Any]:
     chunks = [chunk for document in documents for chunk in document.get("chunks", [])]
-    approved = {chunk["id"]: chunk for chunk in chunks if chunk.get("requirement_tier") == "approved" and chunk.get("id")}
-    if not approved:
-        raise ValueError("Chưa có tag approved để tạo bản tổng hợp")
+    if not chunks:
+        raise ValueError("Tài liệu không có nội dung để tạo bản tổng hợp")
     files = list_files(db_path)
     request, report_truncated = build_request(chunks, matches, files)
     sow_source, sow_truncated = _source_chunks(chunks)
@@ -647,7 +646,7 @@ def generate_report(documents: list[dict[str, Any]], matches: list[dict[str, Any
         questions.append("Phạm vi công việc cụ thể gồm những hạng mục và sản phẩm bàn giao nào?")
     report["clarification_questions"] = questions
     report["source_truncated"] = report_truncated or sow_truncated
-    report["source_files"] = sorted({chunk.get("file", "") for chunk in approved.values() if chunk.get("file")})
+    report["source_files"] = sorted({chunk.get("file", "") for chunk in chunks if chunk.get("file")})
     report["usage"] = summarize_usage(responses["bid_brief"])
     report["usage_events"] = [usage for response in responses.values()
                               if (usage := summarize_usage(response)) is not None]

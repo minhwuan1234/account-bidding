@@ -34,7 +34,7 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Thả một hoặc nhiều PDF/DOCX vào ô đầu trang hoặc bấm vào ô để chọn, sau đó bấm nút xanh **Phân tích tài liệu** để xác nhận chạy. Trong một lần chạy, ứng dụng **chia chunk, suy ra chủ đề và xếp tag vào approved và reject**. Tag Approved tự đi tiếp để gợi ý file. Trong lúc chờ, giao diện hiện một dòng tên các file đang được phân tích; khi hoàn tất, ứng dụng hiện **bản tổng hợp ngay trên màn hình chính** gồm phạm vi công việc, mốc thời gian, yêu cầu nộp và file đối chiếu. **Thư viện file** nằm ở tab riêng. Nhấn `Control+C` trong Terminal để dừng. Khi chạy local, ứng dụng chỉ lắng nghe `127.0.0.1`; bước gợi ý gửi text tag và mô tả Markdown tới OpenAI API.
+Mở [http://127.0.0.1:8765](http://127.0.0.1:8765). Thả một hoặc nhiều PDF/DOCX vào ô đầu trang hoặc bấm vào ô để chọn, sau đó bấm nút xanh **Phân tích tài liệu** để xác nhận chạy. Trong một lần chạy, ứng dụng **chia chunk, suy ra chủ đề và xếp tag vào approved và reject**. Mọi tag đều được xét để gợi ý file; điểm Approved/Reject chỉ được giữ làm thông tin tham khảo. Trong lúc chờ, giao diện hiện một dòng tên các file đang được phân tích; khi hoàn tất, ứng dụng hiện **bản tổng hợp ngay trên màn hình chính** gồm phạm vi công việc, mốc thời gian, yêu cầu nộp và file đối chiếu. **Thư viện file** nằm ở tab riêng. Nhấn `Control+C` trong Terminal để dừng. Khi chạy local, ứng dụng chỉ lắng nghe `127.0.0.1`; bước gợi ý gửi text tag và mô tả Markdown tới OpenAI API.
 
 Phần **Phạm vi công việc** luôn có sáu mục: mục tiêu chính của project, hình thức hợp đồng, bên cung cấp nội dung chuyên môn, hình thức nộp thầu, cách chấm điểm và đánh giá hồ sơ, và chi tiết cùng khối lượng công việc. Các mục dùng `gpt-6-luna` và chạy đồng thời. Riêng mục cách chấm điểm quét toàn bộ tài liệu theo các đợt nhỏ, kể cả chunk bị tag reject; từng quy tắc xét chọn phải có câu trích nguyên văn từ nguồn. Mục không có bằng chứng sẽ hiện “Hồ sơ không nêu rõ.” Khối lượng và tỷ trọng điểm không được tự suy đoán.
 
@@ -77,8 +77,10 @@ Giao diện chỉ hiện các nhóm tag; nội dung chunk xuất hiện trong kh
 
 Ứng dụng dùng embedding local để so **tên tag** với mô tả về yêu cầu và thông tin nền. Điểm 0–1 tính từ chênh lệch độ giống (`clamp(0.5 + margin / 0.12, 0, 1)`). Đây là điểm heuristic, không phải xác suất.
 
-- `approved`: từ `0.50` trở lên, tự đi tiếp.
+- `approved`: từ `0.50` trở lên.
 - `reject`: dưới `0.50`.
+
+Cả hai nhóm đều được xét ở bước gợi ý file và tạo bản tổng hợp; không bắt buộc phải có tag `approved`.
 
 Không cần duyệt thủ công. Dữ liệu duyệt tag cũ trong SQLite được giữ nguyên nhưng không còn ảnh hưởng điểm chấm.
 
@@ -86,9 +88,9 @@ Không cần duyệt thủ công. Dữ liệu duyệt tag cũ trong SQLite đư�
 
 Trong **Thư viện file**, có thể chọn nhiều PDF/DOCX trong một lần và bấm **Lưu file**; ứng dụng lưu từng file riêng cùng **tóm tắt Markdown** trích từ tiêu đề, câu và hàng bảng đại diện. Đây là bản tóm tắt trích lọc, không phải bản do LLM viết; có thể sửa trong mục **Tóm tắt nội dung tài liệu**. File và tóm tắt vẫn có ở lần mở ứng dụng sau. Trên Railway chúng nằm trong MySQL, còn bản local mặc định dùng SQLite. Bản ZIP không chứa database cá nhân.
 
-Sau khi có tag `approved` và file trong thư viện, ứng dụng **tự gợi ý file** sau khi phân tích hoặc lưu file mới trong tab thư viện. Ứng dụng gửi text của từng tag (tối đa 30.000 ký tự cho mỗi tag) và **một mô tả Markdown cho mỗi file** trong thư viện tới OpenAI API. Model trả danh sách file có thể liên quan kèm lý do. Mục **File gợi ý theo tag** chỉ xuất hiện ở cuối màn hình chính sau khi bản tổng hợp hoàn tất và được thu gọn. Mở từng tag để xem text gốc, file gợi ý và đánh dấu file muốn giữ. Trong mục **Thêm file khác** của mỗi tag, bạn có thể chọn một file khác đã có trong thư viện hoặc tải thêm PDF/DOCX. File tải thêm được lưu vào thư viện, tự tạo mô tả Markdown và được chọn cho tag đó.
+Sau khi có tag và file trong thư viện, ứng dụng **tự gợi ý file** sau khi phân tích hoặc lưu file mới trong tab thư viện. Ứng dụng gửi text của từng tag (tối đa 30.000 ký tự cho mỗi tag) và **một mô tả Markdown cho mỗi file** trong thư viện tới OpenAI API. Model trả danh sách file có thể liên quan kèm lý do. Mục **File gợi ý theo tag** chỉ xuất hiện ở cuối màn hình chính sau khi bản tổng hợp hoàn tất và được thu gọn. Mở từng tag để xem text gốc, file gợi ý và đánh dấu file muốn giữ. Trong mục **Thêm file khác** của mỗi tag, bạn có thể chọn một file khác đã có trong thư viện hoặc tải thêm PDF/DOCX. File tải thêm được lưu vào thư viện, tự tạo mô tả Markdown và được chọn cho tag đó.
 
-Gợi ý file theo tag dùng các đoạn `approved`. Phần **Tài liệu cần nộp** quét cả các đoạn `reject` để không bỏ sót giấy tờ do bước phân loại tag; hai cột cố định hiển thị tên, trạng thái và file liên quan, có thể mở từng mục để xem nguồn và chỉnh file. Bố cục giữ đúng hai cột.
+Gợi ý file theo tag dùng mọi đoạn có tag, kể cả đoạn `reject`. Phần **Tài liệu cần nộp** quét cả các đoạn `reject` để không bỏ sót giấy tờ do bước phân loại tag; hai cột cố định hiển thị tên, trạng thái và file liên quan, có thể mở từng mục để xem nguồn và chỉnh file. Bố cục giữ đúng hai cột.
 
 Để bật gợi ý trên máy cá nhân, mở `local_api_key.py` và dán key vào dòng `OPEN_AI_API_KEY = "..."`, sau đó tải lại trang. Nếu cài từ Git hoặc ZIP và chưa có file này, sao chép `local_api_key.example.py` thành `local_api_key.py` trước. File chứa key được Git bỏ qua và không nằm trong bản ZIP. Bạn cũng có thể đặt biến môi trường `OPEN_AI_API_KEY` trước khi chạy ứng dụng (tên `OPENAI_API_KEY` cũng được hỗ trợ); biến môi trường được ưu tiên. Key không xuất hiện trong giao diện, database hoặc JSON. Có thể đổi model bằng `OPENAI_MODEL` (mặc định `gpt-6-luna`). Các lượt gọi model gửi văn bản các đoạn tài liệu và mô tả Markdown, không gửi file nhị phân. Mỗi tag được gợi ý riêng; thời gian và chi phí phụ thuộc số tag và độ dài tài liệu.
 
@@ -102,7 +104,7 @@ Chi phí được tính từ trường `usage` của từng phản hồi OpenAI 
 
 ## Dữ liệu xuất
 
-JSON có `schema_version: 10`, `documents` chứa toàn bộ chunk, `next_step_tags` chỉ chứa tag `approved`, `file_suggestions` chứa gợi ý cùng file đã chọn theo tag, và `bid_report` chứa bản tổng hợp cùng các chỉnh sửa file/trạng thái của bạn. Mỗi chunk giữ `file`, `section_path`, `pages`, `blocks` và `labels.topics`. `requirement_score`/`requirement_tier` là điểm và mức được tính tự động.
+JSON có `schema_version: 10`, `documents` chứa toàn bộ chunk, `next_step_tags` chứa mọi tag được xét tiếp, `file_suggestions` chứa gợi ý cùng file đã chọn theo tag, và `bid_report` chứa bản tổng hợp cùng các chỉnh sửa file/trạng thái của bạn. Mỗi chunk giữ `file`, `section_path`, `pages`, `blocks` và `labels.topics`. `requirement_score`/`requirement_tier` là điểm và mức được tính tự động.
 
 ## Giới hạn hiện tại
 

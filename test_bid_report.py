@@ -85,7 +85,7 @@ class BidReportTests(unittest.TestCase):
         month_quote = "The pilot phase starts in November 2026."
         documents = [{"file": "long.docx", "chunks": [{"id": "long", "file": "long.docx",
             "text": "a" * 80000 + " " + quote + " " + selection_quote + " " + month_quote,
-            "labels": {"topics": ["Registration"]}, "requirement_tier": "approved"}]}]
+            "labels": {"topics": ["Registration"]}, "requirement_tier": "reject"}]}]
 
         def requester(request):
             name = request["text"]["format"]["name"]
@@ -129,6 +129,7 @@ class BidReportTests(unittest.TestCase):
         self.assertIn("tối đa 5", report["evaluation_method"]["rules"][0]["detail"])
         self.assertEqual(report["evaluation_method"]["rules"][0]["source_chunk_ids"], ["long"])
         self.assertEqual(report["deadlines"][0]["value"], "11/2026")
+        self.assertEqual(report["source_files"], ["long.docx"])
 
     def test_no_clarification_questions_when_all_five_facts_have_sources(self):
         documents = [{"file": "rfq.docx", "chunks": [{"id": "scope", "file": "rfq.docx",
@@ -228,12 +229,12 @@ class BidReportTests(unittest.TestCase):
                              "evidence_quote": "Not in document", "source_chunk_ids": ["invented"]}]})
                     return model_response({"detail": "Nộp portfolio." if name == "sow_objective" else "Không có bằng chứng.",
                                            "source_chunk_ids": ["req"] if name == "sow_objective" else ["invented"]})
-                self.assertEqual([chunk["id"] for chunk in payload["source_chunks"]], ["req"])
+                self.assertEqual([chunk["id"] for chunk in payload["source_chunks"]], ["req", "rejected"])
                 answer = {
                     "title": "Portfolio bid", "buyer": "", "source_language": "English", "overview": "",
                     "project_facts": {
                         "audience": {"detail": "Nhà tuyển chọn.", "source_chunk_ids": ["req"]},
-                        "project_deadline": {"detail": "Ngày mai.", "source_chunk_ids": ["rejected"]},
+                        "project_deadline": {"detail": "", "source_chunk_ids": []},
                     },
                     "submission": "Nộp portfolio.",
                 }

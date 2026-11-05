@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from database.library_store import add_file
-from business.llm_tag_match import api_key, approved_tag_groups, has_api_key, match_one_tag
+from business.llm_tag_match import api_key, tag_groups, has_api_key, match_one_tag
 
 
 SAMPLES = Path(__file__).parent / "samples"
@@ -27,21 +27,21 @@ class LLMTagTests(unittest.TestCase):
                 config.write_text('OPEN_AI_API_KEY = "second-key"\n', encoding="utf-8")
                 self.assertEqual(api_key(), "second-key")
 
-    def test_only_approved_chunks_group_under_tag(self):
+    def test_all_chunks_group_under_tag(self):
         chunks = [
             {"id": "a", "file": "a.docx", "text": "First text", "labels": {"topics": ["Scope"]}, "requirement_tier": "approved"},
             {"id": "b", "file": "a.docx", "text": "Second text", "labels": {"topics": ["Scope"]}, "requirement_tier": "approved"},
             {"id": "c", "file": "a.docx", "text": "Rejected", "labels": {"topics": ["Other"]}, "requirement_tier": "reject"},
         ]
-        groups = approved_tag_groups(chunks)
-        self.assertEqual(len(groups), 1)
+        groups = tag_groups(chunks)
+        self.assertEqual(len(groups), 2)
         self.assertIn("First text", groups[0]["full_text"])
         self.assertIn("Second text", groups[0]["full_text"])
-        self.assertNotIn("Rejected", groups[0]["full_text"])
+        self.assertIn("Rejected", groups[1]["full_text"])
 
     def test_model_file_ids_are_validated_and_text_kept(self):
         chunk = {"id": "a", "file": "rfp.docx", "text": "The supplier must deliver a working prototype.",
-                 "pages": [], "section_path": [], "labels": {"topics": ["Prototype"]}, "requirement_tier": "approved",
+                 "pages": [], "section_path": [], "labels": {"topics": ["Prototype"]}, "requirement_tier": "reject",
                  "blocks": [{"kind": "paragraph", "text": "The supplier must deliver a working prototype."}]}
         with TemporaryDirectory() as folder:
             db = Path(folder) / "library.sqlite3"

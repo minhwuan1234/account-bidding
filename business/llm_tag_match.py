@@ -1,4 +1,4 @@
-"""Use an LLM to suggest library files for each approved tag."""
+"""Use an LLM to suggest library files for each document tag."""
 
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ MATCH_SCHEMA = {
 }
 
 INSTRUCTIONS = (
-    "Suggest library files relevant to one approved document tag. "
+    "Suggest library files relevant to one document tag. "
     "Compare the tag's full chunk text with each file's Markdown description. "
     "Return only files plausibly relevant to the tag's content. "
     "Use verdict 'match' for a strong topical fit and 'possible' for partial or uncertain fit; omit unrelated files. "
@@ -72,11 +72,9 @@ INSTRUCTIONS = (
 )
 
 
-def approved_tag_groups(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def tag_groups(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     groups: dict[str, dict[str, Any]] = {}
     for chunk in chunks:
-        if chunk.get("requirement_tier") != "approved":
-            continue
         tag = next(iter(chunk.get("labels", {}).get("topics", [])), "").strip()
         if not tag:
             continue
@@ -135,9 +133,9 @@ def openai_request(body: dict[str, Any]) -> dict[str, Any]:
 
 
 def match_one_tag(chunks: list[dict[str, Any]], *, db_path: Any = None, requester: Callable[[dict[str, Any]], dict[str, Any]] = openai_request) -> dict[str, Any]:
-    groups = approved_tag_groups(chunks)
+    groups = tag_groups(chunks)
     if len(groups) != 1:
-        raise ValueError("Mỗi lần chỉ đối chiếu một tag approved")
+        raise ValueError("Mỗi lần chỉ đối chiếu một tag")
     group = groups[0]
     files = list_files(db_path)
     if not files:
