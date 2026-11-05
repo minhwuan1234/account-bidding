@@ -127,7 +127,23 @@ def openai_request(body: dict[str, Any]) -> dict[str, Any]:
         with urlopen(request, timeout=120) as response:
             return json.load(response)
     except HTTPError as exc:
-        raise RuntimeError(f"OpenAI API trả lỗi HTTP {exc.code}. Kiểm tra API key, quyền model và hạn mức.") from exc
+        try:
+            detail = json.loads(exc.read().decode("utf-8"))
+            error = detail.get("error", {})
+            code = error.get("code") or error.get("type") or ""
+        except (ValueError, UnicodeError, AttributeError):
+            code = ""
+        if exc.code == 429:
+            if code in {"insufficient_quota", "credit_balance_exhausted", "organization_spend_limit_exceeded",
+                        "project_spend_limit_exceeded", "organization_usage_limit_exceeded", "usage_limit_exceeded"}:
+                reason = "Đã hết credit hoặc chạm giới hạn chi tiêu/sử dụng; cần kiểm tra Billing và Limits."
+            else:
+                reason = "Đã vượt giới hạn tốc độ gọi API hoặc số token. Hãy giảm số lượt gọi đồng thời và thử lại sau."
+            retry_after = exc.headers.get("Retry-After") if exc.headers else None
+            if retry_after and code not in {"insufficient_quota", "credit_balance_exhausted"}:
+                reason += f" Thử lại sau {retry_after}."
+            raise RuntimeError(f"OpenAI API HTTP 429 ({code or 'không rõ mã lỗi'}): {reason}") from exc
+        raise RuntimeError(f"OpenAI API trả lỗi HTTP {exc.code}" + (f" ({code})" if code else "") + ".") from exc
     except URLError as exc:
         raise RuntimeError("Không kết nối được OpenAI API") from exc
 

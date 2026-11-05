@@ -1,18 +1,28 @@
 import json
+import io
 import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from database.library_store import add_file
-from business.llm_tag_match import api_key, tag_groups, has_api_key, match_one_tag
+from business.llm_tag_match import api_key, tag_groups, has_api_key, match_one_tag, openai_request
 
 
 SAMPLES = Path(__file__).parent / "samples"
 
 
 class LLMTagTests(unittest.TestCase):
+    def test_429_reports_billing_code_instead_of_generic_limit(self):
+        body = io.BytesIO(b'{"error":{"code":"credit_balance_exhausted"}}')
+        error = HTTPError("https://api.openai.com/v1/responses", 429, "Too Many Requests", {}, body)
+        with patch("business.llm_tag_match.api_key", return_value="test-key"), \
+             patch("business.llm_tag_match.urlopen", side_effect=error):
+            with self.assertRaisesRegex(RuntimeError, "credit_balance_exhausted"):
+                openai_request({"model": "gpt-6-luna", "input": "test"})
+
     def test_server_reads_named_secret_from_environment(self):
         with patch.dict(os.environ, {"OPEN_AI_API_KEY": "test-key", "OPENAI_API_KEY": ""}):
             self.assertTrue(has_api_key())

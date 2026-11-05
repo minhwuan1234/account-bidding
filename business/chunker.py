@@ -184,9 +184,12 @@ def make_chunks(blocks: list[Block], filename: str) -> list[dict[str, Any]]:
 
 
 def chunk_file(path: str | Path, *, semantic: bool = False, threshold: float = 0.85,
-               embedder: Any = None, on_blocks: Callable[[list[Block]], None] | None = None) -> dict[str, Any]:
+               embedder: Any = None, on_blocks: Callable[[list[Block]], None] | None = None,
+               on_progress: Callable[[str], None] | None = None) -> dict[str, Any]:
     path = Path(path)
     suffix = path.suffix.lower()
+    if on_progress:
+        on_progress("Đang đọc nội dung PDF/DOCX")
     if suffix == ".pdf":
         blocks = pdf_blocks(path)
     elif suffix == ".docx":
@@ -194,16 +197,26 @@ def chunk_file(path: str | Path, *, semantic: bool = False, threshold: float = 0
     else:
         raise ValueError("Only PDF and DOCX files are supported")
     if on_blocks is not None:
+        if on_progress:
+            on_progress("Đang tạo tóm tắt tài liệu")
         on_blocks(blocks)
+    if on_progress:
+        on_progress("Đang chia tài liệu thành các đoạn")
     chunks = make_chunks(blocks, path.name)
     if semantic:
         from business.semantic import split_semantic
 
+        if on_progress:
+            on_progress("Đang chia đoạn theo ngữ nghĩa")
         chunks = split_semantic(chunks, threshold=threshold, embedder=embedder)
     from business.labels import attach_labels
 
+    if on_progress:
+        on_progress("Đang tạo tag cho các đoạn")
     chunks = attach_labels(chunks, embedder=embedder)
     from business.requirements_filter import mark_requirement_candidates
 
+    if on_progress:
+        on_progress("Đang phân loại các đoạn")
     chunks = mark_requirement_candidates(chunks, embedder=embedder)
     return {"file": path.name, "format": suffix[1:], "mode": "semantic" if semantic else "structural", "chunk_count": len(chunks), "chunks": chunks}

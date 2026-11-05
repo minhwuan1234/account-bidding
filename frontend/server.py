@@ -10,10 +10,12 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from business.analysis_jobs import get as get_analysis_job, submit as submit_analysis_job
+from business.bid_history import create_bid, get_bid, list_bids, update_bid
 from business.bid_report import generate_report
 from business.chunker import chunk_file
 from business.library_service import add_document, delete_document, list_documents, update_document_description
 from business.llm_tag_match import MODEL, has_api_key, match_one_tag
+from business.report_jobs import get as get_report_job, submit as submit_report_job
 from business.system_service import database_status
 from business.upload_service import receive_rfp, summarize_rfp
 
@@ -38,6 +40,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         url = urlparse(self.path)
+        if url.path == "/api/bids":
+            try:
+                bid_id = parse_qs(url.query).get("id", [""])[0]
+                result = get_bid(bid_id) if bid_id else list_bids()
+                if bid_id and result is None:
+                    self.respond_json(404, {"error": "Không tìm thấy bid"})
+                else:
+                    self.respond_json(200, {"bid": result} if bid_id else {"bids": result})
+            except Exception as exc:
+                self.respond_json(503, {"error": str(exc)})
+            return
         if url.path == "/favicon.svg":
             self.respond(200, (ASSETS / "favicon.svg").read_bytes(), "image/svg+xml")
             return
@@ -48,6 +61,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(404, json.dumps({"error": "Phiên xử lý không còn. Hãy phân tích lại file."}, ensure_ascii=False).encode(), "application/json; charset=utf-8")
             else:
                 self.respond(200, json.dumps(job, ensure_ascii=False).encode(), "application/json; charset=utf-8")
+            return
+        if url.path == "/api/bid-report-job":
+            job_id = parse_qs(url.query).get("id", [""])[0]
+            job = get_report_job(job_id)
+            if job is None:
+                self.respond_json(404, {"error": "Phiên tạo báo cáo không còn. Hãy chạy lại."})
+            else:
+                self.respond_json(200, job)
             return
         if url.path == "/api/database-status":
             self.respond(200, json.dumps(database_status()).encode(), "application/json; charset=utf-8")
@@ -79,6 +100,8 @@ class Handler(BaseHTTPRequestHandler):
             "/api/library-description": self.post_library_description,
             "/api/llm-match-tag": self.post_match_tag,
             "/api/bid-report": self.post_bid_report,
+            "/api/bid-report-job": self.post_bid_report_job,
+            "/api/bids": self.post_bid,
         }
         handler = routes.get(url.path)
         if handler is None:
@@ -143,8 +166,34 @@ class Handler(BaseHTTPRequestHandler):
     def post_bid_report(self, url):
         payload = json.loads(self.read_body())
         if not isinstance(payload.get("documents"), list) or not isinstance(payload.get("matches"), list):
-            raise ValueError("Thiếu tài liệu hoặc kết quả gợi ý file")
+            raise ValueError("Thiếu tài liệu hoặc dữ liệu báo cáo")
         self.respond_json(200, generate_report(payload["documents"], payload["matches"]))
+
+    def post_bid_report_job(self, url):
+        payload = json.loads(self.read_body())
+        if not isinstance(payload.get("documents"), list) or not isinstance(payload.get("matches", []), list):
+            raise ValueError("Thiếu tài liệu hoặc dữ liệu báo cáo")
+        job_id = submit_report_job(payload["documents"], payload.get("matches", []))
+        self.respond_json(202, {"id": job_id})
+
+    def post_bid(self, url):
+        payload = json.loads(self.read_body(4096))
+        self.respond_json(201, {"bid": create_bid(str(payload.get("title", "")))})
+
+    def do_PUT(self):
+        url = urlparse(self.path)
+        if url.path != "/api/bids":
+            self.send_error(404)
+            return
+        try:
+            bid_id = parse_qs(url.query).get("id", [""])[0]
+            if not bid_id:
+                raise ValueError("Thiếu ID bid")
+            payload = json.loads(self.read_body(60 * 1024 * 1024))
+            bid = update_bid(bid_id, payload)
+            self.respond_json(200, {"bid": bid}) if bid else self.respond_json(404, {"error": "Không tìm thấy bid"})
+        except Exception as exc:
+            self.respond_json(400, {"error": str(exc)})
 
     def respond_json(self, code: int, data) -> None:
         self.respond(code, json.dumps(data, ensure_ascii=False).encode(), "application/json; charset=utf-8")
@@ -153,6 +202,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", mime)
         self.send_header("Content-Length", str(len(data)))
+        if mime.startswith(("text/html", "text/javascript", "text/css")):
+            self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(data)
 

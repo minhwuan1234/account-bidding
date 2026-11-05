@@ -14,7 +14,7 @@ class AnalysisJobTests(unittest.TestCase):
         started = threading.Event()
         release = threading.Event()
 
-        def slow_analysis(path, *, semantic, threshold, on_blocks=None):
+        def slow_analysis(path, *, semantic, threshold, on_blocks=None, on_progress=None):
             self.assertEqual(Path(path).read_bytes(), b"sample document")
             started.set()
             self.assertTrue(release.wait(3))

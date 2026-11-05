@@ -1,7 +1,22 @@
 
 const files=document.querySelector('#files'), status=document.querySelector('#status'), candidateBox=document.querySelector('#candidates'), exportBtn=document.querySelector('#export'),compareBox=document.querySelector('#compare'),compareRetry=document.querySelector('#compare-retry'),compareStatus=document.querySelector('#compare-status'),compareResults=document.querySelector('#compare-results'),libraryUpload=document.querySelector('#library-upload'),libraryStatus=document.querySelector('#library-status'),libraryList=document.querySelector('#library-list');let latest=[],latestMatch=null,latestReport=null,library=[],llmReady=false,analysisRevision=0,suggestionGeneration=0,suggestionTimer=null,suggestionAbortController=null,lastSuggestionKey='',activeSuggestionKey='';const tagPreview=document.querySelector('#tag-preview'),tagDialog=document.querySelector('#tag-dialog'),reviewButton=document.querySelector('#review-tags');function updateOverview(){document.querySelector('#metric-documents').textContent=latest.length;document.querySelector('#metric-tags').textContent=nextStepTags().length;document.querySelector('#metric-library').textContent=library.length}
+let activeBidId=null,activeBidTitle='',bidSaveQueue=Promise.resolve(),bidSaveTimer=null;
+const historyList=document.querySelector('#history-list'),historyStatus=document.querySelector('#history-status');
+function saveBidSnapshot(nextStatus){
+ if(!activeBidId)return Promise.resolve();
+ const bidId=activeBidId;activeBidTitle=(latestReport?.title||activeBidTitle).slice(0,255);
+ const payload=JSON.stringify({title:activeBidTitle,status:nextStatus||((latestReport)?'complete':'processing'),documents:latest,matches:latestMatch,report:latestReport});
+ const task=async()=>{const response=await fetch('/api/bids?id='+encodeURIComponent(bidId),{method:'PUT',headers:{'Content-Type':'application/json'},body:payload});const data=await response.json();if(!response.ok)throw Error(data.error||'Không lưu được lịch sử bid');return data.bid};
+ bidSaveQueue=bidSaveQueue.catch(()=>{}).then(task);return bidSaveQueue;
+}
+function scheduleBidSave(){saveBidSnapshot().catch(error=>{reportStatus.className='error';reportStatus.textContent='Không lưu được thay đổi vào lịch sử: '+error.message})}
+async function loadBidHistory(){historyStatus.className='';historyStatus.textContent='Đang tải lịch sử…';try{await bidSaveQueue.catch(()=>{});const response=await fetch('/api/bids');const data=await response.json();if(!response.ok)throw Error(data.error||'Không tải được lịch sử');historyList.replaceChildren();for(const bid of data.bids){const row=el('article','history-item'),info=el('div'),title=el('h3','',bid.title),date=new Date(bid.created_at),meta=el('p','',`${Number.isNaN(date.getTime())?'':date.toLocaleString('vi-VN')+' · '}${bid.document_count} tài liệu · ${bid.missing_count} mục thiếu${bid.status==='processing'?' · Đang xử lý':bid.status==='error'?' · Lỗi':''}`),open=el('button','secondary','Mở bid');open.onclick=()=>openBid(bid.id);info.append(title,meta);row.append(info,open);historyList.append(row)}if(!data.bids.length)historyList.append(el('p','history-empty','Chưa có bid nào. Tải tài liệu ở tab Tổng quan bid để bắt đầu.'));historyStatus.textContent=''}catch(error){historyStatus.className='error';historyStatus.textContent='Không tải được lịch sử: '+error.message}}
+async function openBid(bidId){if(activeRun){historyStatus.textContent='Đợi bid hiện tại xử lý xong rồi mở bid khác.';return}historyStatus.textContent='Đang mở bid…';try{await bidSaveQueue.catch(()=>{});const response=await fetch('/api/bids?id='+encodeURIComponent(bidId));const data=await response.json();if(!response.ok)throw Error(data.error||'Không mở được bid');clearTimeout(suggestionTimer);clearTimeout(bidSaveTimer);suggestionGeneration++;suggestionAbortController?.abort();reportGeneration++;analysisRevision++;lastSuggestionKey='';activeSuggestionKey='';reportOverrides.clear();activeBidId=bidId;activeBidTitle=data.bid.title;latest=data.bid.documents||[];latestMatch=data.bid.matches||null;latestReport=data.bid.report||null;renderCandidates();if(latestMatch)renderTagResults(latestMatch.tag_matches||[]);else compareResults.replaceChildren();compareBox.hidden=!(latestMatch?.tag_matches?.length);exportBtn.disabled=!latest.length;reportStatus.className='meta';reportStatus.textContent='';if(latestReport)renderBidReport();else{reportBox.replaceChildren();reportToolbar.hidden=!latest.length;reportRun.disabled=!latest.length;reportStatus.textContent='Bid này chưa có bản tổng hợp. Bấm “Tạo lại” để tiếp tục.'}hideProcessingFiles();historyStatus.textContent='';setTab('analysis')}catch(error){historyStatus.className='error';historyStatus.textContent='Không mở được bid: '+error.message}}
 function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n}
 const processingFiles=document.querySelector('#processing-files');function showProcessingFiles(names,phase='Đang phân tích'){const filesToShow=names?.length?names:latest.map(doc=>doc.file).filter(Boolean);processingFiles.textContent=phase+(filesToShow.length?': '+filesToShow.join(' · '):'…');processingFiles.hidden=false}function hideProcessingFiles(){processingFiles.hidden=true;processingFiles.textContent=''}
+const processingLog=document.querySelector('#processing-log'),processingLogLines=document.querySelector('#processing-log-lines');
+function clearProcessingLog(){processingLogLines.replaceChildren();processingLog.hidden=true}
+function appendProcessingLog(state,message){const row=el('li');row.dataset.state=state;const time=el('time','',new Date().toLocaleTimeString('vi-VN',{hour12:false}));row.append(time,el('span','',message));processingLogLines.append(row);processingLog.hidden=false;processingLogLines.scrollTop=processingLogLines.scrollHeight}
 const dropZone=document.querySelector('#drop-zone'),chosenFiles=document.querySelector('#chosen-files'),runButton=document.querySelector('#run');function updateRunButton(){runButton.disabled=!files.files.length||!!activeRun}function updateChosenFiles(){chosenFiles.replaceChildren();for(const file of files.files)chosenFiles.append(el('span','',file.name));chosenFiles.hidden=!files.files.length;updateRunButton()}
 files.addEventListener('click',()=>{files.value='';updateChosenFiles()});files.addEventListener('change',updateChosenFiles);
 for(const name of ['dragenter','dragover'])dropZone.addEventListener(name,event=>{event.preventDefault();if(!files.disabled)dropZone.classList.add('drag-over')});
@@ -17,8 +32,8 @@ function addRunUsage(usage,id=activeRun?.id){if(!activeRun||activeRun.id!==id)re
 function finishRun(note){if(!activeRun)return;activeRun.endedAt=performance.now();activeRun.note=note;runHistory.unshift(activeRun);activeRun=null;updateRunButton();clearInterval(metricsTimer);metricsTimer=null;renderRunMetrics()}
 function showTagPreview(button,topic,chunks,event){tagPreview.replaceChildren(el('strong','',topic),el('span','',chunks.map(item=>item.text).join('\n\n').slice(0,2500)));tagPreview.hidden=false;const rect=button.getBoundingClientRect(),x=event&&Number.isFinite(event.clientX)?event.clientX:rect.left,y=event&&Number.isFinite(event.clientY)?event.clientY:rect.bottom;tagPreview.style.left=Math.max(12,Math.min(x+14,innerWidth-tagPreview.offsetWidth-12))+'px';tagPreview.style.top=Math.max(12,Math.min(y+18,innerHeight-tagPreview.offsetHeight-12))+'px'}
 function hideTagPreview(){tagPreview.hidden=true}
-function setTab(name){for(const tab of ['analysis','library']){const selected=tab===name;document.querySelector('#tab-'+tab).setAttribute('aria-selected',String(selected));document.querySelector('#tab-panel-'+tab).hidden=!selected}document.querySelector('#tab-'+name).focus()}
-for(const tab of ['analysis','library'])document.querySelector('#tab-'+tab).onclick=()=>setTab(tab);
+function setTab(name){for(const tab of ['analysis','history','library']){const selected=tab===name;document.querySelector('#tab-'+tab).setAttribute('aria-selected',String(selected));document.querySelector('#tab-panel-'+tab).hidden=!selected}document.querySelector('#tab-'+name).focus();if(name==='history')loadBidHistory()}
+for(const tab of ['analysis','history','library'])document.querySelector('#tab-'+tab).onclick=()=>setTab(tab);
 reviewButton.onclick=()=>{if(latest.length&&!tagDialog.open)tagDialog.showModal()};
 document.querySelector('#close-tags').onclick=()=>tagDialog.close();
 tagDialog.onclick=event=>{if(event.target===tagDialog)tagDialog.close()};
@@ -35,12 +50,16 @@ async function readChunkResponse(response){
 }
 async function analyzeFile(file,semantic,threshold){
   const query='?filename='+encodeURIComponent(file.name)+'&semantic='+semantic+'&threshold='+encodeURIComponent(threshold);
+  appendProcessingLog('running',`Đang tải lên ${file.name}`);
   const started=await readChunkResponse(await fetch('/api/chunk-job'+query,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file}));
   if(!started.id)throw Error('Máy chủ không tạo được phiên phân tích.');
+  appendProcessingLog('queued',`${file.name}: Đã nhận file, đang chờ phân tích`);
   const deadline=Date.now()+15*60*1000;
+  let lastPhase='';
   while(Date.now()<deadline){
     await new Promise(resolve=>setTimeout(resolve,1500));
     const job=await readChunkResponse(await fetch('/api/chunk-job?id='+encodeURIComponent(started.id)));
+    if(job.phase&&job.phase!==lastPhase){appendProcessingLog(job.status==='error'?'error':job.status==='done'?'done':'running',`${file.name}: ${job.phase}`);lastPhase=job.phase}
     if(job.status==='done')return job.result;
     if(job.status==='error')throw Error(job.error||'Phân tích thất bại.');
     if(job.status!=='queued'&&job.status!=='running')throw Error('Trạng thái phân tích không hợp lệ.');
@@ -51,19 +70,28 @@ function nextStepTags(){return [...new Set(latest.flatMap(doc=>doc.chunks.map(ch
 function renderCandidates(){const groups={approved:new Map(),reject:new Map()};for(const doc of latest)for(const chunk of doc.chunks)for(const topic of chunk.labels.topics){const tier=chunk.requirement_tier==='approved'?'approved':'reject',group=groups[tier];if(!group.has(topic))group.set(topic,[]);group.get(topic).push(chunk)}candidateBox.replaceChildren();candidateBox.hidden=!latest.length;reviewButton.hidden=!latest.length;updateOverview();if(!latest.length)return;candidateBox.append(el('p','hint','Mọi tag đều được xét ở bước tiếp theo. Rê chuột vào tag để xem nội dung đoạn.'));for(const tier of ['approved','reject']){const group=groups[tier];candidateBox.append(el('h3','',`${tier} (${group.size})`));const list=el('div','candidate-list');for(const [topic,chunks] of group){const chunk=chunks[0],chip=el('span','tag-chip '+tier,`${topic} · ${Number(chunk.requirement_score).toFixed(2)}`);chip.tabIndex=0;chip.onpointerenter=event=>showTagPreview(chip,topic,chunks,event);chip.onpointermove=event=>showTagPreview(chip,topic,chunks,event);chip.onpointerleave=hideTagPreview;chip.onfocus=()=>showTagPreview(chip,topic,chunks);chip.onblur=hideTagPreview;list.append(chip)}candidateBox.append(list)}candidateBox.append(el('p','meta',`Đi tiếp: ${nextStepTags().length} tag`))}
 document.querySelector('#run').onclick=async()=>{
  analysisRevision++;suggestionGeneration++;suggestionAbortController?.abort();reportGeneration++;activeSuggestionKey='';lastSuggestionKey='';clearTimeout(suggestionTimer);
- latest=[];latestMatch=null;latestReport=null;reportOverrides.clear();
+ clearTimeout(bidSaveTimer);latest=[];latestMatch=null;latestReport=null;activeBidId=null;reportOverrides.clear();
  document.querySelector('#report-content').replaceChildren();reportToolbar.hidden=true;document.querySelector('#report-run').disabled=true;document.querySelector('#report-print').hidden=true;
  compareResults.replaceChildren();compareStatus.textContent='';status.textContent='';status.className='';reportStatus.textContent='';
- candidateBox.hidden=true;compareBox.hidden=true;reviewButton.hidden=true;exportBtn.disabled=true;hideProcessingFiles();
+ candidateBox.hidden=true;compareBox.hidden=true;reviewButton.hidden=true;exportBtn.disabled=true;hideProcessingFiles();clearProcessingLog();
  const selected=[...files.files];if(!selected.length){status.textContent='Hãy chọn PDF hoặc DOCX.';return}
+ activeBidTitle=selected.map(file=>file.name).join(' · ').slice(0,255);
  showProcessingFiles(selected.map(file=>file.name));startRun('Phân tích & tổng hợp');
  const button=document.querySelector('#run'),semantic=document.querySelector('#semantic').checked,threshold=document.querySelector('#threshold').value;
  button.disabled=true;files.disabled=true;let errors=[];
  try{
-  for(const file of selected){try{const data=await analyzeFile(file,semantic,threshold);latest.push(data);renderCandidates()}catch(error){errors.push(`${file.name}: ${error.message}`)}}
+  const created=await fetch('/api/bids',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:activeBidTitle})});
+  const createdData=await created.json();if(!created.ok)throw Error(createdData.error||'Không lưu được bid vào lịch sử');activeBidId=createdData.bid.id;
+  for(const file of selected){
+   let data;
+   try{data=await analyzeFile(file,semantic,threshold)}catch(error){errors.push(`${file.name}: ${error.message}`);appendProcessingLog('error',`${file.name}: ${error.message}`);continue}
+   latest.push(data);renderCandidates();await saveBidSnapshot('processing');
+  }
+  await saveBidSnapshot(latest.length?(errors.length?'partial':'processing'):'error');
   exportBtn.disabled=!latest.length;status.textContent=errors.length?'Lỗi: '+errors.join('; '):'';status.className=errors.length?'error':'';
-  if(latest.length){setTab('analysis');scheduleSuggestions()}else{hideProcessingFiles();reportStatus.textContent='Không phân tích được tài liệu.';finishRun('Không phân tích được tài liệu')}
- }finally{files.disabled=false;updateRunButton()}
+  if(latest.length){setTab('analysis');await loadModelStatus();if(llmReady)generateBidReport();else{hideProcessingFiles();reportStatus.textContent='Chưa kết nối model để tạo bản tổng hợp.';finishRun('Chưa kết nối model')}}else{hideProcessingFiles();reportStatus.textContent='Không phân tích được tài liệu.';finishRun('Không phân tích được tài liệu')}
+ }catch(error){hideProcessingFiles();status.className='error';status.textContent='Không lưu được bid: '+error.message;finishRun('Không lưu được bid')}
+ finally{files.disabled=false;updateRunButton()}
 };
 function renderLibrary(){
  libraryList.replaceChildren();
@@ -81,89 +109,54 @@ function renderLibrary(){
     for(const item of latestMatch?.tag_matches||[]){item.suggestions=(item.suggestions||[]).filter(entry=>entry.file_id!==file.id);item.manual_files=(item.manual_files||[]).filter(entry=>entry.file_id!==file.id);item.selected_file_ids=(item.selected_file_ids||[]).filter(id=>id!==file.id)}
     for(const item of latestReport?.requirements||[])item.file_ids=(item.file_ids||[]).filter(id=>id!==file.id);
     for(const edit of reportOverrides.values())edit.file_ids=edit.file_ids.filter(id=>id!==file.id);
-    if(activeSuggestionKey){suggestionGeneration++;suggestionAbortController?.abort();activeSuggestionKey='';lastSuggestionKey='';scheduleSuggestions()}
-    renderLibrary();updateOverview();if(latestMatch)renderTagResults(latestMatch.tag_matches||[]);if(latestReport)renderBidReport();
+    renderLibrary();updateOverview();if(latestMatch)renderTagResults(latestMatch.tag_matches||[]);if(latestReport)renderBidReport();scheduleBidSave();
     libraryStatus.className='';libraryStatus.textContent=`Đã xóa ${file.filename} khỏi thư viện.`;
    }catch(error){libraryStatus.className='error';libraryStatus.textContent='Lỗi: '+error.message;remove.disabled=false}
   };
   head.append(el('strong','',file.filename),remove);row.append(head);
   const details=el('details'),summary=el('summary','','Tóm tắt nội dung tài liệu');details.append(summary);
   const textarea=el('textarea');textarea.value=file.description_md;textarea.setAttribute('aria-label',`Tóm tắt nội dung ${file.filename}`);
-  const save=el('button','secondary','Lưu tóm tắt');save.onclick=async()=>{save.disabled=true;try{const response=await fetch('/api/library-description',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:file.id,description_md:textarea.value})});const data=await response.json();if(!response.ok)throw Error(data.error||'Không lưu được tóm tắt');file.description_md=textarea.value;lastSuggestionKey='';scheduleSuggestions();libraryStatus.textContent=`Đã lưu tóm tắt cho ${file.filename}.`}catch(error){libraryStatus.textContent='Lỗi: '+error.message}finally{save.disabled=false}};
+  const save=el('button','secondary','Lưu tóm tắt');save.onclick=async()=>{save.disabled=true;try{const response=await fetch('/api/library-description',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:file.id,description_md:textarea.value})});const data=await response.json();if(!response.ok)throw Error(data.error||'Không lưu được tóm tắt');file.description_md=textarea.value;libraryStatus.textContent=`Đã lưu tóm tắt cho ${file.filename}.`}catch(error){libraryStatus.textContent='Lỗi: '+error.message}finally{save.disabled=false}};
   details.append(textarea,save);row.append(details);libraryList.append(row)
  }
 }
-async function saveLibraryFiles(filesToSave,onSaved){let saved=0,errors=[];for(const [index,file] of filesToSave.entries()){libraryStatus.textContent=`Đang lưu ${index+1}/${filesToSave.length}: ${file.name}`;try{const response=await fetch('/api/library?filename='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});const data=await response.json();if(!response.ok)throw Error(data.error||'Không lưu được file');saved++;if(onSaved)onSaved(data.file)}catch(error){errors.push(`${file.name}: ${error.message}`)}}await loadLibrary();if(saved&&!onSaved){lastSuggestionKey='';scheduleSuggestions()}libraryStatus.textContent=`Đã lưu ${saved}/${filesToSave.length} file và tạo tóm tắt riêng.`+(errors.length?' Lỗi: '+errors.join('; '):'');libraryStatus.className=errors.length?'error':'';return {saved,errors}}
-function renderTagResults(items){
- compareResults.replaceChildren();document.querySelector('#compare-heading').textContent=`File gợi ý theo tag (${items.length})`;
- for(const [index,item] of items.entries()){
-  item.selected_file_ids??=[];item.manual_files??=[];const card=el('details','tag-result'),summary=el('summary');summary.append(el('strong','',item.tag),el('small','',`${item.suggestions.length} file gợi ý`));card.append(summary);const body=el('div','tag-result-body');
-  const source=el('details');source.append(el('summary','','Xem nội dung tag'),el('pre','tag-text',item.full_text));body.append(source);if(item.text_sent_to_model_truncated)body.append(el('p','req-warning','Model chỉ nhận 30.000 ký tự đầu.'));
-  const grid=el('div','suggestion-grid'),all=[...item.suggestions,...item.manual_files];if(!all.length)grid.append(el('p','empty-result','Chưa có file gợi ý. Bạn có thể thêm file từ thư viện hoặc tải lên.'));
-  const selectedCount=el('p','selected-count',`Đã chọn ${item.selected_file_ids.length} file`);
-  for(const suggestion of all){const row=el('label','suggestion select-suggestion'),check=el('input');check.type='checkbox';check.checked=item.selected_file_ids.includes(suggestion.file_id);check.setAttribute('aria-label',`Chọn ${suggestion.filename} cho tag ${item.tag}`);check.onchange=()=>{item.selected_file_ids=check.checked?[...new Set([...item.selected_file_ids,suggestion.file_id])]:item.selected_file_ids.filter(id=>id!==suggestion.file_id);selectedCount.textContent=`Đã chọn ${item.selected_file_ids.length} file`;if(latestReport)reportStatus.textContent='Bạn đã đổi file theo tag. Bấm “Tạo lại” để cập nhật bản tổng hợp.'};const info=el('span');info.append(el('strong','',suggestion.filename));if(suggestion.reason)info.append(el('span','suggestion-verdict',suggestion.reason));row.append(check,info);grid.append(row)}body.append(grid,selectedCount);
-  const add=el('details','tag-details');add.append(el('summary','','Thêm file khác'));const addBody=el('div','add-file-body'),fromLibrary=el('div','controls'),picker=el('select');picker.setAttribute('aria-label',`Chọn file khác cho tag ${item.tag}`);picker.append(el('option','','Chọn từ thư viện'));picker.firstChild.value='';const used=new Set(all.map(file=>file.file_id));for(const file of library)if(!used.has(file.id)){const option=el('option','',file.filename);option.value=file.id;picker.append(option)}const addButton=el('button','secondary','Thêm file');addButton.onclick=()=>{const file=library.find(entry=>entry.id===picker.value);if(!file)return;item.manual_files.push({file_id:file.id,filename:file.filename,verdict:'manual',reason:''});item.selected_file_ids=[...new Set([...item.selected_file_ids,file.id])];renderTagResults(items);compareResults.querySelectorAll('.tag-result')[index].open=true};fromLibrary.append(picker,addButton);
-  const uploadRow=el('div','controls'),upload=el('input'),uploadButton=el('button','secondary','Tải lên và chọn');upload.type='file';upload.accept='.pdf,.docx';upload.multiple=true;upload.setAttribute('aria-label',`Tải thêm file cho tag ${item.tag}`);uploadButton.onclick=async()=>{const filesToSave=[...upload.files];if(!filesToSave.length){compareStatus.textContent='Hãy chọn PDF hoặc DOCX để tải lên.';return}uploadButton.disabled=true;try{const result=await saveLibraryFiles(filesToSave,file=>{item.manual_files.push({file_id:file.id,filename:file.filename,verdict:'manual',reason:''});item.selected_file_ids=[...new Set([...item.selected_file_ids,file.id])]});compareStatus.textContent=`Đã thêm ${result.saved} file cho tag ${item.tag}.`;renderTagResults(items);compareResults.querySelectorAll('.tag-result')[index].open=true}finally{uploadButton.disabled=false}};uploadRow.append(upload,uploadButton);addBody.append(fromLibrary,uploadRow);add.append(addBody);body.append(add);card.append(body);compareResults.append(card)
- }
+async function saveLibraryFiles(filesToSave,onSaved){let saved=0,errors=[];for(const [index,file] of filesToSave.entries()){libraryStatus.textContent=`Đang lưu ${index+1}/${filesToSave.length}: ${file.name}`;try{const response=await fetch('/api/library?filename='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});const data=await response.json();if(!response.ok)throw Error(data.error||'Không lưu được file');saved++;if(onSaved)onSaved(data.file)}catch(error){errors.push(`${file.name}: ${error.message}`)}}await loadLibrary();if(latestReport)renderBidReport();libraryStatus.textContent=`Đã lưu ${saved}/${filesToSave.length} file và tạo tóm tắt riêng.`+(errors.length?' Lỗi: '+errors.join('; '):'');libraryStatus.className=errors.length?'error':'';return {saved,errors}}
+function renderTagResults(){
+ // Match results remain available to the report; the per-tag suggestion list is hidden.
+ compareResults.replaceChildren();
+ compareBox.hidden=true;
 }
-async function loadModelStatus(){try{const response=await fetch('/api/llm-status');const data=await response.json();llmReady=Boolean(data.ready);scheduleSuggestions()}catch(error){llmReady=false;if(latest.length)compareStatus.textContent='Không kiểm tra được trạng thái model.'}}
+async function loadModelStatus(){try{const response=await fetch('/api/llm-status');const data=await response.json();llmReady=Boolean(data.ready)}catch(error){llmReady=false;if(latest.length)reportStatus.textContent='Không kiểm tra được trạng thái model.'}}
 async function loadLibrary(){try{const response=await fetch('/api/library');const data=await response.json();if(!response.ok)throw Error(data.error||'Không tải được thư viện');library=data.files;renderLibrary();updateOverview()}catch(error){libraryStatus.textContent='Lỗi: '+error.message}}
 document.querySelector('#library-save').onclick=async()=>{const selected=[...libraryUpload.files];if(!selected.length){libraryStatus.textContent='Hãy chọn PDF hoặc DOCX.';return}const button=document.querySelector('#library-save');button.disabled=true;try{await saveLibraryFiles(selected);libraryUpload.value=''}finally{button.disabled=false}};
-function scheduleSuggestions(){clearTimeout(suggestionTimer);suggestionTimer=setTimeout(runAutoSuggestions,250)}
-async function mapConcurrentOrdered(values,limit,task){
- const results=Array(values.length);let next=0;
- async function worker(){while(next<values.length){const index=next++;results[index]=await task(values[index],index)}}
- await Promise.all(Array.from({length:Math.min(limit,values.length)},worker));
- return results;
-}
-async function runAutoSuggestions(){
- if(!latest.length)return;
- const tags=nextStepTags();
- if(!tags.length){compareBox.hidden=true;compareResults.replaceChildren();latestMatch=null;if(latest.some(doc=>doc.chunks.length)&&llmReady)generateBidReport();else{hideProcessingFiles();reportStatus.textContent=latest.some(doc=>doc.chunks.length)?'Chưa kết nối model.':'Tài liệu không có nội dung để tạo bản tổng hợp.';finishRun('Không có nội dung để tổng hợp')}return}
- if(!library.length){compareBox.hidden=true;if(llmReady)generateBidReport();else{hideProcessingFiles();reportStatus.textContent='Chưa kết nối model.';finishRun('Chưa kết nối model')}return}
- if(!llmReady){compareBox.hidden=true;hideProcessingFiles();reportStatus.textContent='Chưa cấu hình model gợi ý trên máy chủ.';finishRun('Chưa kết nối model');return}
- const key=JSON.stringify([analysisRevision,tags,library.map(file=>[file.id,file.description_md])]);
- if(key===lastSuggestionKey||key===activeSuggestionKey)return;
- showProcessingFiles(undefined,'Đang gợi ý file');compareBox.hidden=true;ensureRun('Gợi ý file & tổng hợp');const generation=++suggestionGeneration;suggestionAbortController?.abort();const controller=new AbortController();suggestionAbortController=controller;activeSuggestionKey=key;compareRetry.hidden=true;compareStatus.className='';
- const allChunks=latest.flatMap(doc=>doc.chunks);
- const priorByTag=new Map((latestMatch?.tag_matches||[]).map(item=>[item.tag,item]));
- const runId=activeRun?.id;let completed=0;compareStatus.textContent=`Đang tự gợi ý 0/${tags.length} tag`;
- try{
-  const items=await mapConcurrentOrdered(tags,10,async(tag)=>{
-   const chunks=allChunks.filter(chunk=>chunk.labels.topics[0]===tag);
-   const response=await fetch('/api/llm-match-tag',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chunks}),signal:controller.signal});
-   const data=await response.json();
-   if(!response.ok)throw Error(data.error||'Model không gợi ý được');
-   if(generation!==suggestionGeneration)return null;
-   addRunUsage(data.usage,runId);const prior=priorByTag.get(tag);
-   data.selected_file_ids=prior?.selected_file_ids?.filter(id=>library.some(file=>file.id===id))||[];
-   data.manual_files=prior?.manual_files?.filter(file=>library.some(entry=>entry.id===file.file_id))||[];
-   completed++;compareStatus.textContent=`Đang tự gợi ý ${completed}/${tags.length} tag`;
-   return data;
-  });
-  if(generation!==suggestionGeneration)return;
-  latestMatch={tag_matches:items};renderTagResults(items);
-  lastSuggestionKey=key;compareStatus.textContent=`Đã tự gợi ý file cho ${items.length} tag. Hãy chọn file muốn dùng.`;generateBidReport();
- }catch(error){if(generation!==suggestionGeneration)return;controller.abort();compareStatus.textContent='Lỗi gợi ý: '+error.message;compareStatus.className='error';compareRetry.hidden=false;compareBox.hidden=false;reportStatus.className='error';reportStatus.textContent='Lỗi gợi ý file: '+error.message+' Hãy tải lại tài liệu để thử lại.';hideProcessingFiles();if(activeRun?.id===runId){activeRun.unknownCost=true;finishRun('Lỗi gợi ý file')}}
- finally{if(generation===suggestionGeneration)activeSuggestionKey='';if(suggestionAbortController===controller)suggestionAbortController=null}
-}
 const reportBox=document.querySelector('#report-content'),reportStatus=document.querySelector('#report-status'),reportRun=document.querySelector('#report-run'),reportPrint=document.querySelector('#report-print'),reportToolbar=document.querySelector('#report-toolbar');
-let reportGeneration=0;const reportOverrides=new Map();function reportKey(item){return [item.tag,item.title].join("||")}function rememberReportEdit(item){reportOverrides.set(reportKey(item),{file_ids:[...(item.file_ids||[])]})}
+let reportGeneration=0;const reportOverrides=new Map();function reportKey(item){return [item.tag,item.title].join("||")}function rememberReportEdit(item){reportOverrides.set(reportKey(item),{file_ids:[...(item.file_ids||[])]});scheduleBidSave()}
 function sourceDetails(ids){return reportSourceTags(ids)}
 const reportSourcePreview=document.querySelector('#report-source-preview');let sourcePreviewHideTimer=null;
 function hideReportSourcePreview(){clearTimeout(sourcePreviewHideTimer);reportSourcePreview.hidden=true}
 function scheduleHideReportSourcePreview(){clearTimeout(sourcePreviewHideTimer);sourcePreviewHideTimer=setTimeout(hideReportSourcePreview,150)}
 reportSourcePreview.onpointerenter=()=>clearTimeout(sourcePreviewHideTimer);reportSourcePreview.onpointerleave=hideReportSourcePreview;
+function sourceTableRows(block){
+ if(Array.isArray(block.rows)&&block.rows.length)return block.rows;
+ const lines=String(block.text||'').split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+ if(lines.length<2||!lines.every(line=>line.includes('|')))return null;
+ const rows=lines.map(line=>line.replace(/^\||\|$/g,'').split('|').map(cell=>cell.trim()));
+ const width=Math.max(...rows.map(row=>row.length));
+ return width>=2?rows.map(row=>[...row,...Array(width-row.length).fill('')]):null;
+}
+function appendSourceTable(section,rows){
+ const scroll=el('div','report-source-table-scroll'),table=el('table','report-source-table'),body=el('tbody');
+ for(const row of rows){const tr=el('tr');for(const cell of row)tr.append(el('td','',String(cell??'')));body.append(tr)}
+ table.append(body);scroll.append(table);section.append(scroll);
+}
 function sourcePreviewChunk(chunk){
  const section=el('section','report-source-chunk');
  section.append(el('div','report-source-meta',`${chunk.file||'Tài liệu'}${chunk.pages?.length?' · trang '+chunk.pages.join(', '):''}`));
- if(!chunk.blocks?.length){section.append(el('p','report-source-text',chunk.text||''));return section}
+ if(!chunk.blocks?.length){const rows=sourceTableRows({text:chunk.text});if(rows)appendSourceTable(section,rows);else section.append(el('p','report-source-text',chunk.text||''));return section}
  for(const block of chunk.blocks){
-  if(block.kind==='table'&&Array.isArray(block.rows)&&block.rows.length){
-   const scroll=el('div','report-source-table-scroll'),table=el('table','report-source-table'),body=el('tbody');
-   for(const row of block.rows){const tr=el('tr');for(const cell of row)tr.append(el('td','',String(cell??'')));body.append(tr)}
-   table.append(body);scroll.append(table);section.append(scroll);
-  }else if(block.text){section.append(el('p','report-source-text',block.text))}
+  const rows=block.kind==='table'?sourceTableRows(block):null;
+  if(rows)appendSourceTable(section,rows);
+  else if(block.text)section.append(el('p','report-source-text',block.text));
  }
  return section;
 }
@@ -177,8 +170,10 @@ function deadlineStatus(value){
  if(dayFirst){day=Number(dayFirst[1]);month=Number(dayFirst[2]);year=Number(dayFirst[3])}
  else if(iso){year=Number(iso[1]);month=Number(iso[2]);day=Number(iso[3])}
  else{
+  const dayMonth=text.match(/(?:^|\D)(\d{1,2})[\/.-](\d{1,2})(?![\/.-]\d)(?!\d)/);
+  if(dayMonth)return ['Ngày / tháng','unknown'];
   const monthOnly=text.match(/(?:^|\D)(\d{1,2})[\/.-](\d{4})(?!\d)/)||text.match(/tháng\s+(\d{1,2})\s*(?:năm|[\/.-])\s*(\d{4})/i);
-  if(!monthOnly)return ['Chưa rõ năm','unknown'];
+  if(!monthOnly)return ['Theo mốc','unknown'];
   month=Number(monthOnly[1]);year=Number(monthOnly[2]);if(month<1||month>12)return ['Chưa rõ tháng','unknown'];
   const monthIndex=year*12+month,currentIndex=now.getFullYear()*12+now.getMonth()+1;
   return monthIndex<currentIndex?['Đã qua','past']:monthIndex>currentIndex?['Sắp tới','upcoming']:['Tháng này','today'];
@@ -188,7 +183,7 @@ function deadlineStatus(value){
  const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
  return date<today?['Đã qua','past']:date>today?['Sắp tới','upcoming']:['Hôm nay','today']
 }
-function milestoneDateText(value){const text=String(value||''),monthOnly=text.match(/^(\d{1,2})[\/.-](\d{4})$/);return monthOnly?`Tháng ${Number(monthOnly[1])}/${monthOnly[2]}`:text.replace(/\s+at\s+/i,', ')}
+function milestoneDateText(value){const text=String(value||'').replace(/\s+at\s+/i,', '),full=text.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})(.*)$/),partial=text.match(/^(\d{1,2})[\/.-](\d{1,2})(?![\/.-]\d)(.*)$/),monthOnly=text.match(/^(\d{1,2})[\/.-](\d{4})$/);const wrap=el('strong','report-date-value');if(full){wrap.append(el('span','report-date-primary',`${full[1].padStart(2,'0')}/${full[2].padStart(2,'0')}`),el('span','report-date-secondary',`${full[3]}${full[4]||''}`))}else if(partial){wrap.append(el('span','report-date-primary',`${partial[1].padStart(2,'0')}/${partial[2].padStart(2,'0')}`));if(partial[3])wrap.append(el('span','report-date-secondary',partial[3]))}else if(monthOnly){wrap.append(el('span','report-date-primary',`Tháng ${Number(monthOnly[1])}`),el('span','report-date-secondary',monthOnly[2]))}else wrap.textContent=text;return wrap}
 function renderBidReport(){
  reportBox.replaceChildren();if(!latestReport)return;const r=latestReport;
  const hero=el('header','report-hero');hero.append(el('p','eyebrow','TỔNG QUAN BID'),el('h1','',r.title||'Hồ sơ thầu'));
@@ -201,7 +196,7 @@ function renderBidReport(){
 
  if(r.clarification_questions?.length){const questions=reportSection('Câu hỏi nháp');const list=el('ul','report-questions');for(const question of r.clarification_questions)list.append(el('li','',question));questions.append(list)}
  const submission=reportSection('Tài liệu cần nộp');
- const timeline=numberedSection(submission,1,'Các mốc');if(r.deadlines?.length){const grid=el('div','report-date-grid');for(const date of r.deadlines){const card=el('article','report-date'),head=el('div','report-date-head'),[statusText,statusClass]=date.conditional?['Theo điều kiện','unknown']:deadlineStatus(date.value),dateText=milestoneDateText(date.value);head.append(el('span','',date.label),el('span','report-date-status '+statusClass,statusText));card.append(head,el('strong','',dateText));if(date.note)card.append(el('p','',date.note));const source=sourceDetails(date.source_chunk_ids||[]);if(source)card.append(source);grid.append(card)}timeline.append(grid)}else timeline.append(el('p','report-note','Chưa xác định được mốc thời gian.'));
+ const timeline=numberedSection(submission,1,'Các mốc');if(r.deadlines?.length){const grid=el('div','report-date-grid');for(const date of r.deadlines){const card=el('article','report-date'),head=el('div','report-date-head'),[statusText,statusClass]=date.conditional?['Theo điều kiện','unknown']:deadlineStatus(date.value),dateText=milestoneDateText(date.value);head.append(el('span','',date.label),el('span','report-date-status '+statusClass,statusText));card.append(head,dateText);if(date.note)card.append(el('p','',date.note));const source=sourceDetails(date.source_chunk_ids||[]);if(source)card.append(source);grid.append(card)}timeline.append(grid)}else timeline.append(el('p','report-note','Chưa xác định được mốc thời gian.'));
  const checklist=numberedSection(submission,2,'Yêu cầu hồ sơ');checklist.classList.add('report-checklist-section');const items=r.requirements||[];const categoryGrid=el('div','report-category-grid');checklist.append(categoryGrid);
  for(const category of ['Hồ sơ công ty','Proposal']){
   const categoryItems=items.filter(item=>item.category===category);
@@ -212,8 +207,8 @@ function renderBidReport(){
    const row=el('article','report-check-row'),head=el('div','report-check-row-head'),rowKey=reportKey(item);row.dataset.reportKey=rowKey;
    head.append(el('h4','',item.title));
    const selected=library.filter(file=>(item.file_ids||[]).includes(file.id));
-   head.append(el('span','report-status-tag '+(selected.length?'has-file':'missing-file'),selected.length?'Gợi ý':'Thiếu'));row.append(head);
-   if(selected.length)row.append(el('div','report-file-summary','File gợi ý: '+selected.slice(0,2).map(file=>file.filename).join(' · ')+(selected.length>2?` · +${selected.length-2} file`:'')));
+   head.append(el('span','report-status-tag '+(selected.length?'has-file':'missing-file'),selected.length?'Đã chọn':'Chưa chọn'));row.append(head);
+   if(selected.length)row.append(el('div','report-file-summary','File đã chọn: '+selected.slice(0,2).map(file=>file.filename).join(' · ')+(selected.length>2?` · +${selected.length-2} file`:'')));
    const detail=el('details','report-item-details');detail.append(el('summary','','Chọn file liên quan'));
    const body=el('div','report-item-body');
    const options=el('div','report-file-options');
@@ -231,10 +226,52 @@ function renderBidReport(){
 
  reportPrint.hidden=false;reportRun.disabled=false;reportToolbar.hidden=false
 }
-async function generateBidReport(){if(!latest.some(doc=>doc.chunks.length)||!llmReady)return;const runId=ensureRun('Tạo lại bản tổng hợp');const generation=++reportGeneration;reportRun.disabled=true;reportToolbar.hidden=true;reportStatus.className='meta';reportStatus.textContent='';showProcessingFiles(undefined,'Đang tạo bản tổng hợp');compareBox.hidden=true;try{const response=await fetch('/api/bid-report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({documents:latest,matches:latestMatch?.tag_matches||[]})});const data=await response.json();if(!response.ok)throw Error(data.error||'Không tạo được bản tổng hợp');if(generation!==reportGeneration)return;for(const usage of data.usage_events||[data.usage])addRunUsage(usage,runId);if(data.usage_missing&&activeRun?.id===runId)activeRun.unknownCost=true;for(const item of data.requirements||[]){const edit=reportOverrides.get(reportKey(item));if(edit)item.file_ids=edit.file_ids.filter(id=>library.some(file=>file.id===id))}latestReport=data;renderBidReport();hideProcessingFiles();compareBox.hidden=!(latestMatch?.tag_matches?.length);reportStatus.textContent='';if(activeRun?.id===runId)finishRun('Hoàn tất')}catch(error){if(generation!==reportGeneration)return;reportStatus.className='error';reportStatus.textContent='Lỗi tạo bản tổng hợp: '+error.message;hideProcessingFiles();compareBox.hidden=!(latestMatch?.tag_matches?.length);reportToolbar.hidden=!latestReport;if(activeRun?.id===runId){activeRun.unknownCost=true;finishRun('Lỗi tạo bản tổng hợp')}}finally{if(generation===reportGeneration)reportRun.disabled=false}}
+async function reportJobResult(){
+ const startedResponse=await fetch('/api/bid-report-job',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({documents:latest,matches:[]})});
+ const started=await startedResponse.json();
+ if(!startedResponse.ok)throw Error(started.error||'Không khởi tạo được báo cáo');
+ appendProcessingLog('queued','Đã gửi tài liệu tới máy chủ để tạo báo cáo');
+ const deadline=Date.now()+20*60*1000;
+ let seen=0;
+ while(Date.now()<deadline){
+  await new Promise(resolve=>setTimeout(resolve,1500));
+  const response=await fetch('/api/bid-report-job?id='+encodeURIComponent(started.id));
+  const job=await response.json();
+  if(!response.ok)throw Error(job.error||'Không đọc được tiến độ báo cáo');
+  for(const event of (job.events||[]).slice(seen))appendProcessingLog(event.state,event.message);
+  seen=(job.events||[]).length;
+  if(job.status==='done')return job.result;
+  if(job.status==='error')throw Error(job.error||'Không tạo được bản tổng hợp');
+  if(job.status!=='queued'&&job.status!=='running')throw Error('Trạng thái báo cáo không hợp lệ');
+ }
+ throw Error('Tạo báo cáo quá 20 phút. Hãy thử lại sau.');
+}
+async function generateBidReport(){
+ if(!latest.some(doc=>doc.chunks.length)||!llmReady)return;
+ const runId=ensureRun('Tạo lại bản tổng hợp'),generation=++reportGeneration;
+ reportRun.disabled=true;reportToolbar.hidden=true;reportStatus.className='meta';reportStatus.textContent='';
+ showProcessingFiles(undefined,'Đang tạo bản tổng hợp');compareBox.hidden=true;
+ try{
+  const data=await reportJobResult();
+  if(generation!==reportGeneration)return;
+  for(const usage of data.usage_events||[data.usage])addRunUsage(usage,runId);
+  if(data.usage_missing&&activeRun?.id===runId)activeRun.unknownCost=true;
+  for(const item of data.requirements||[]){const edit=reportOverrides.get(reportKey(item));if(edit)item.file_ids=edit.file_ids.filter(id=>library.some(file=>file.id===id))}
+  latestReport=data;renderBidReport();hideProcessingFiles();compareBox.hidden=true;reportStatus.textContent='';
+  try{await saveBidSnapshot('complete');appendProcessingLog('done','Đã lưu bản tổng hợp vào lịch sử')}
+  catch(saveError){reportStatus.className='error';reportStatus.textContent='Bản tổng hợp đã tạo nhưng chưa lưu được vào lịch sử: '+saveError.message;appendProcessingLog('error',reportStatus.textContent)}
+  if(activeRun?.id===runId)finishRun('Hoàn tất');
+ }catch(error){
+  if(generation!==reportGeneration)return;
+  reportStatus.className='error';reportStatus.textContent='Lỗi tạo bản tổng hợp: '+error.message;
+  appendProcessingLog('error',reportStatus.textContent);
+  hideProcessingFiles();compareBox.hidden=true;reportToolbar.hidden=!latestReport;
+  if(activeRun?.id===runId){activeRun.unknownCost=true;finishRun('Lỗi tạo bản tổng hợp')}
+ }finally{if(generation===reportGeneration)reportRun.disabled=false}
+}
 reportRun.onclick=generateBidReport;reportPrint.onclick=()=>window.print();
 window.addEventListener('beforeprint',()=>{const evaluation=document.querySelector('.report-evaluation');if(evaluation&&!evaluation.open){evaluation.open=true;evaluation.dataset.printOpened='true'}});
 window.addEventListener('afterprint',()=>{const evaluation=document.querySelector('.report-evaluation[data-print-opened]');if(evaluation){evaluation.open=false;delete evaluation.dataset.printOpened}});
-compareRetry.onclick=()=>{lastSuggestionKey='';scheduleSuggestions()};
+compareRetry.onclick=null;
 loadLibrary();loadModelStatus();
 exportBtn.onclick=()=>{const blob=new Blob([JSON.stringify({schema_version:10,next_step_tags:nextStepTags(),documents:latest,file_suggestions:latestMatch,bid_report:latestReport,run_metrics:runHistory.map(run=>({label:run.label,duration_seconds:Number(metricDuration(run).split(' ')[0]),input_tokens:run.inputTokens,output_tokens:run.outputTokens,estimated_cost_usd:run.unknownCost?null:run.costUsd,api_calls:run.calls,note:run.note}))},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='suggested_files.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};

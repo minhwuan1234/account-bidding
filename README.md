@@ -13,6 +13,8 @@ test_*.py              Bài kiểm tra
 
 Luồng phụ thuộc: `frontend → business → database`. `app.py` chỉ khởi chạy máy chủ. File tĩnh được phục vụ từ `frontend/` qua `/app.js`, `/styles.css` và `/favicon.svg`.
 
+Tab **Lịch sử bid** lưu mỗi lượt phân tích thành một bản ghi trong SQLite local hoặc MySQL trên Railway. Bản ghi gồm các tài liệu đã xử lý, bản tổng hợp và file thư viện đã chọn. Mở lại bid để chọn thêm file cho mục còn thiếu; thay đổi được lưu ngay. File gốc của tài liệu RFP và thư viện vẫn ở các bảng tài liệu riêng.
+
 ### Kết nối Railway MySQL
 
 Ứng dụng nhận `MYSQL_URL` từ service Railway, hoặc bộ biến `MYSQLHOST`, `MYSQLPORT`, `MYSQLUSER`, `MYSQLPASSWORD`, `MYSQLDATABASE`. Trong Railway, thêm biến tham chiếu từ MySQL service vào **service ứng dụng** (ví dụ `MYSQL_URL=${{MySQL.MYSQL_URL}}`). Gọi `GET /api/database-status` để thử kết nối bằng `SELECT 1`; phản hồi chỉ có `configured` và `connected`, không trả về mật khẩu.
@@ -52,7 +54,7 @@ Chế độ **chia theo ngữ nghĩa trong từng mục** được bật mặc �
 
 1. Mở tab **Thư viện file**, thêm `samples/sample.pdf` (có thể chọn nhiều file cùng lúc). Ứng dụng tự tạo mô tả Markdown; mở mục **Mô tả Markdown** để xem hoặc sửa.
 2. Quay lại màn hình **Tổng quan bid**, thả `samples/sample.docx` vào ô tải file (cũng có thể thả nhiều file đầu vào cùng lúc), rồi bấm **Phân tích tài liệu**. Đợi dòng trạng thái phân tích biến mất khi có kết quả.
-3. Cấu hình `OPEN_AI_API_KEY` trên máy chủ. Gợi ý file cho các tag `approved` chạy tự động. Thêm PDF/DOCX vào tab **Thư viện file** khi cần bổ sung tài liệu.
+3. Cấu hình `OPEN_AI_API_KEY` trên máy chủ. Thêm PDF/DOCX vào tab **Thư viện file** để tự chọn cho từng tài liệu cần nộp.
 4. Xem **Tài liệu cần nộp** trên màn hình chính, mở từng yêu cầu để chọn file liên quan từ thư viện. Nhãn **Có rồi/Thiếu** cập nhật theo lựa chọn. Hai nút **Tạo lại** và **In / Lưu PDF** nằm ở cuối báo cáo. Chạy kiểm thử bằng `python -m unittest -v`.
 
 
@@ -88,13 +90,15 @@ Không cần duyệt thủ công. Dữ liệu duyệt tag cũ trong SQLite đư�
 
 Trong **Thư viện file**, có thể chọn nhiều PDF/DOCX trong một lần và bấm **Lưu file**; ứng dụng lưu từng file riêng cùng **tóm tắt Markdown** trích từ tiêu đề, câu và hàng bảng đại diện. Đây là bản tóm tắt trích lọc, không phải bản do LLM viết; có thể sửa trong mục **Tóm tắt nội dung tài liệu**. File và tóm tắt vẫn có ở lần mở ứng dụng sau. Trên Railway chúng nằm trong MySQL, còn bản local mặc định dùng SQLite. Bản ZIP không chứa database cá nhân.
 
-Sau khi có tag và file trong thư viện, ứng dụng **tự gợi ý file** sau khi phân tích hoặc lưu file mới trong tab thư viện. Ứng dụng gửi text của từng tag (tối đa 30.000 ký tự cho mỗi tag) và **một mô tả Markdown cho mỗi file** trong thư viện tới OpenAI API. Model trả danh sách file có thể liên quan kèm lý do. Mục **File gợi ý theo tag** chỉ xuất hiện ở cuối màn hình chính sau khi bản tổng hợp hoàn tất và được thu gọn. Mở từng tag để xem text gốc, file gợi ý và đánh dấu file muốn giữ. Trong mục **Thêm file khác** của mỗi tag, bạn có thể chọn một file khác đã có trong thư viện hoặc tải thêm PDF/DOCX. File tải thêm được lưu vào thư viện, tự tạo mô tả Markdown và được chọn cho tag đó.
+Sau khi có tag và file trong thư viện, ứng dụng **tự đối chiếu file theo tag**. Ứng dụng gửi text của từng tag (tối đa 30.000 ký tự cho mỗi tag) và **một mô tả Markdown cho mỗi file** trong thư viện tới OpenAI API. Kết quả đối chiếu được dùng nội bộ khi tạo báo cáo; danh sách gợi ý theo từng tag không hiển thị trên giao diện. Người dùng có thể chỉnh file liên quan trực tiếp trong từng mục **Tài liệu cần nộp** của báo cáo và tải thêm PDF/DOCX trong tab thư viện.
 
-Gợi ý file theo tag dùng mọi đoạn có tag, kể cả đoạn `reject`. Phần **Tài liệu cần nộp** quét cả các đoạn `reject` để không bỏ sót giấy tờ do bước phân loại tag; hai cột cố định hiển thị tên, trạng thái và file liên quan, có thể mở từng mục để xem nguồn và chỉnh file. Bố cục giữ đúng hai cột.
+Phần **Tài liệu cần nộp** quét cả các đoạn `reject` để không bỏ sót giấy tờ do bước phân loại tag. Danh sách hiển thị thành hai cột cố định; người dùng mở từng mục để xem nguồn và tự chọn file liên quan.
 
 Để bật gợi ý trên máy cá nhân, mở `local_api_key.py` và dán key vào dòng `OPEN_AI_API_KEY = "..."`, sau đó tải lại trang. Nếu cài từ Git hoặc ZIP và chưa có file này, sao chép `local_api_key.example.py` thành `local_api_key.py` trước. File chứa key được Git bỏ qua và không nằm trong bản ZIP. Bạn cũng có thể đặt biến môi trường `OPEN_AI_API_KEY` trước khi chạy ứng dụng (tên `OPENAI_API_KEY` cũng được hỗ trợ); biến môi trường được ưu tiên. Key không xuất hiện trong giao diện, database hoặc JSON. Có thể đổi model bằng `OPENAI_MODEL` (mặc định `gpt-6-luna`). Các lượt gọi model gửi văn bản các đoạn tài liệu và mô tả Markdown, không gửi file nhị phân. Mỗi tag được gợi ý riêng; thời gian và chi phí phụ thuộc số tag và độ dài tài liệu.
 
-Gợi ý chỉ dựa trên mô tả file; nó chưa xác nhận file đáp ứng yêu cầu. Bản tổng hợp trên màn hình chính dùng LLM để đọc các phần của tài liệu đầu vào và liên kết từng yêu cầu với file có thể phù hợp. Bạn có thể chọn/bỏ file và tải thêm file. Các lựa chọn ở bản tổng hợp được giữ trong phiên trình duyệt và trong JSON xuất ra; thư viện file và mô tả Markdown được lưu ở SQLite.
+Bản tổng hợp trên màn hình chính dùng LLM để đọc tài liệu đầu vào và trích các giấy tờ cần nộp. Ứng dụng tạm thời không đối chiếu tag với thư viện hoặc tự gợi ý file; người dùng chọn file cho từng mục. Các lựa chọn được lưu cùng bid; thư viện file và mô tả Markdown được lưu trong database đã cấu hình.
+
+Trong lúc chạy, mục **Tiến độ xử lý** hiển thị bước đọc/chia/tag từng file và trạng thái các phần của báo cáo. Báo cáo chạy tối đa 4 lời gọi model đồng thời để giảm nguy cơ HTTP 429. Khi OpenAI trả 429, ứng dụng hiện mã lỗi cụ thể nếu API có trả về; lỗi giới hạn tốc độ và lỗi hạn mức thanh toán cần xử lý khác nhau.
 
 ## Thời gian và chi phí mỗi lần chạy
 
