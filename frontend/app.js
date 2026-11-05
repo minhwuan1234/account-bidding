@@ -154,7 +154,20 @@ const reportSourcePreview=document.querySelector('#report-source-preview');let s
 function hideReportSourcePreview(){clearTimeout(sourcePreviewHideTimer);reportSourcePreview.hidden=true}
 function scheduleHideReportSourcePreview(){clearTimeout(sourcePreviewHideTimer);sourcePreviewHideTimer=setTimeout(hideReportSourcePreview,150)}
 reportSourcePreview.onpointerenter=()=>clearTimeout(sourcePreviewHideTimer);reportSourcePreview.onpointerleave=hideReportSourcePreview;
-function showReportSourcePreview(chip,topic,chunks){clearTimeout(sourcePreviewHideTimer);reportSourcePreview.replaceChildren(el('strong','',topic),el('span','',chunks.map(chunk=>`${chunk.file||'Tài liệu'}${chunk.pages?.length?' · trang '+chunk.pages.join(', '):''}\n${chunk.text||''}`).join('\n\n')));reportSourcePreview.hidden=false;const rect=chip.getBoundingClientRect();reportSourcePreview.style.left=Math.max(12,Math.min(rect.left,innerWidth-reportSourcePreview.offsetWidth-12))+'px';reportSourcePreview.style.top=Math.max(12,Math.min(rect.bottom+8,innerHeight-reportSourcePreview.offsetHeight-12))+'px'}
+function sourcePreviewChunk(chunk){
+ const section=el('section','report-source-chunk');
+ section.append(el('div','report-source-meta',`${chunk.file||'Tài liệu'}${chunk.pages?.length?' · trang '+chunk.pages.join(', '):''}`));
+ if(!chunk.blocks?.length){section.append(el('p','report-source-text',chunk.text||''));return section}
+ for(const block of chunk.blocks){
+  if(block.kind==='table'&&Array.isArray(block.rows)&&block.rows.length){
+   const scroll=el('div','report-source-table-scroll'),table=el('table','report-source-table'),body=el('tbody');
+   for(const row of block.rows){const tr=el('tr');for(const cell of row)tr.append(el('td','',String(cell??'')));body.append(tr)}
+   table.append(body);scroll.append(table);section.append(scroll);
+  }else if(block.text){section.append(el('p','report-source-text',block.text))}
+ }
+ return section;
+}
+function showReportSourcePreview(chip,topic,chunks){clearTimeout(sourcePreviewHideTimer);reportSourcePreview.replaceChildren(el('strong','',topic),...chunks.map(sourcePreviewChunk));reportSourcePreview.hidden=false;const rect=chip.getBoundingClientRect();reportSourcePreview.style.left=Math.max(12,Math.min(rect.left,innerWidth-reportSourcePreview.offsetWidth-12))+'px';reportSourcePreview.style.top=Math.max(12,Math.min(rect.bottom+8,innerHeight-reportSourcePreview.offsetHeight-12))+'px'}
 function reportSourceTags(ids){const wanted=new Set(ids),groups=new Map();for(const chunk of latest.flatMap(doc=>doc.chunks)){if(!wanted.has(chunk.id))continue;const topics=chunk.labels?.topics?.length?chunk.labels.topics:[chunk.section_path?.at(-1)||chunk.file||'Nguồn'];for(const topic of topics){if(!groups.has(topic))groups.set(topic,[]);if(!groups.get(topic).some(item=>item.id===chunk.id))groups.get(topic).push(chunk)}}if(!groups.size)return null;const wrap=el('div','report-source-tags');for(const [topic,chunks] of groups){const chip=el('button','report-source-tag',topic+(chunks.length>1?` · ${chunks.length}`:''));chip.type='button';chip.setAttribute('aria-label',`Xem nguồn: ${topic}`);chip.onpointerenter=()=>showReportSourcePreview(chip,topic,chunks);chip.onpointerleave=scheduleHideReportSourcePreview;chip.onfocus=()=>showReportSourcePreview(chip,topic,chunks);chip.onblur=scheduleHideReportSourcePreview;chip.onclick=()=>showReportSourcePreview(chip,topic,chunks);wrap.append(chip)}return wrap}
 function reportSection(title){const section=el('section','report-section');section.append(el('h2','',title));reportBox.append(section);return section}
 function numberedSection(parent,number,title){const section=el('div','report-subsection');const heading=el('h3');heading.append(el('span','report-number',number+'.'),document.createTextNode(title));section.append(heading);parent.append(section);return section}
