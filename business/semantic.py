@@ -5,10 +5,12 @@ from __future__ import annotations
 import math
 import re
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 
 MODEL_ID = "intfloat/multilingual-e5-small"
+MODEL_PATH = Path(__file__).resolve().parent.parent / "embedding_model"
 SENTENCE_END = re.compile(r"(?<=[.!?。！？])\s+")
 
 
@@ -18,7 +20,7 @@ def local_model():
         from sentence_transformers import SentenceTransformer
     except ImportError as exc:
         raise RuntimeError("Chưa cài embedding. Chạy: python -m pip install -r requirements.txt") from exc
-    return SentenceTransformer(MODEL_ID, device="cpu")
+    return SentenceTransformer(str(MODEL_PATH) if MODEL_PATH.is_dir() else MODEL_ID, device="cpu")
 
 
 def _units(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:

@@ -6,3 +6,4 @@ data/*.sqlite3
 data/*.sqlite3-*
 .env
 local_api_key.py
+embedding_model/
