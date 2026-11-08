@@ -23,7 +23,7 @@ Khi chạy trên Railway, mọi PDF/DOCX tải lên để **phân tích RFP** ho
 
 Trên máy local không có biến MySQL, ứng dụng tiếp tục lưu vào SQLite `data/tag_examples.sqlite3`. Endpoint `/api/database-status` khi đó trả `{"configured": false, "connected": false}`. Tag mẫu vẫn dùng SQLite. **File đã lưu trong SQLite trước đây không tự chuyển sang MySQL**; cần tải lại lên Railway nếu muốn đưa chúng vào database đó.
 
-Ứng dụng Python chia PDF/DOCX theo cấu trúc tài liệu. Mỗi chunk gồm nội dung dưới **một tiêu đề gần nhất** cho đến tiêu đề kế tiếp, kèm đường dẫn mục, tên file và trang PDF. Bảng được giữ dưới dạng hàng/cột trong JSON. Chia tiếp theo ngữ nghĩa được bật mặc định; chủ đề của mỗi chunk được chọn từ chính nội dung chunk bằng embedding local. Sau đó ứng dụng chấm **tag chủ đề** và xếp chúng vào ba mức để quyết định tag nào đi tiếp. Không có giới hạn 500 token cho chunk. Phân tích và gợi ý chủ đề chạy local; bước gợi ý file và tạo bản tổng hợp dùng OpenAI API khi máy chủ có API key.
+Ứng dụng Python chia PDF/DOCX theo cấu trúc tài liệu. Mỗi chunk gồm nội dung dưới **một tiêu đề gần nhất** cho đến tiêu đề kế tiếp, kèm đường dẫn mục, tên file và trang PDF. Bảng được giữ dưới dạng hàng/cột trong JSON. Chia tiếp theo ngữ nghĩa được bật mặc định; chủ đề của mỗi chunk được chọn từ chính nội dung chunk bằng embedding OpenAI API. Sau đó ứng dụng chấm **tag chủ đề** và xếp chúng vào ba mức để quyết định tag nào đi tiếp. Không có giới hạn 500 token cho chunk. Chia tài liệu chạy trên máy chủ; embedding, gợi ý file và tạo bản tổng hợp dùng OpenAI API khi máy chủ có API key.
 
 ## Cài và chạy trên macOS
 
@@ -77,7 +77,7 @@ Giao diện chỉ hiện các nhóm tag; nội dung chunk xuất hiện trong kh
 
 ## Chọn tag để đi tiếp
 
-Ứng dụng dùng embedding local để so **tên tag** với mô tả về yêu cầu và thông tin nền. Điểm 0–1 tính từ chênh lệch độ giống (`clamp(0.5 + margin / 0.12, 0, 1)`). Đây là điểm heuristic, không phải xác suất.
+Ứng dụng dùng embedding OpenAI API để so **tên tag** với mô tả về yêu cầu và thông tin nền. Điểm 0–1 tính từ chênh lệch độ giống (`clamp(0.5 + margin / 0.12, 0, 1)`). Đây là điểm heuristic, không phải xác suất.
 
 - `approved`: từ `0.50` trở lên.
 - `reject`: dưới `0.50`.
@@ -102,7 +102,7 @@ Trong lúc chạy, mục **Tiến độ xử lý** hiển thị bước đọc/c
 
 ## Thời gian và chi phí mỗi lần chạy
 
-Thời gian từ lúc bấm **Phân tích** đến khi gợi ý file và bản tổng hợp hoàn tất, cùng chi phí API ước tính bằng USD, vẫn được tính nội bộ nhưng không hiển thị trên màn hình chính. Mỗi lần bấm **Tạo lại** cũng được ghi thành một lượt riêng. Số lượt gọi model, token vào/ra và các lượt trước được giữ trong phiên trang hiện tại và kèm trong JSON xuất ra. Phân tích embedding local không phát sinh chi phí OpenAI API.
+Thời gian từ lúc bấm **Phân tích** đến khi gợi ý file và bản tổng hợp hoàn tất, cùng chi phí API ước tính bằng USD, vẫn được tính nội bộ nhưng không hiển thị trên màn hình chính. Mỗi lần bấm **Tạo lại** cũng được ghi thành một lượt riêng. Số lượt gọi model, token vào/ra và các lượt trước được giữ trong phiên trang hiện tại và kèm trong JSON xuất ra. Chi phí embedding API chưa được cộng vào số tiền ước tính này.
 
 Chi phí được tính từ trường `usage` của từng phản hồi OpenAI Responses API. Với `gpt-6-luna` Standard, ứng dụng dùng đơn giá [$0,10/1 triệu token đầu vào, $0,01/1 triệu token đầu vào được cache, $0,125/1 triệu token ghi cache và $0,50/1 triệu token đầu ra](https://developers.openai.com/api/docs/models/gpt-6-luna). Nếu đổi sang model khác hoặc API không trả đủ dữ liệu, giao diện báo **Chưa xác định** thay vì hiển thị $0. Đây là ước tính, không phải số tiền thanh toán cuối cùng.
 
@@ -114,7 +114,7 @@ JSON có `schema_version: 10`, `documents` chứa toàn bộ chunk, `next_step_t
 
 - PDF scan chỉ chứa ảnh cần OCR trước khi phân tích. PDF nhiều cột hoặc bảng không có đường kẻ có thể bị đọc sai thứ tự hoặc không nhận thành bảng.
 - PDF không có cấu trúc Heading thực, nên việc nhận tiêu đề là heuristic và cần kiểm tra bằng mắt.
-- Semantic chunking phụ thuộc vào ngưỡng, chất lượng mô hình và cách nhận ranh giới câu; cần xem lại các ranh giới trong JSON xuất ra. Mô hình chỉ đọc tối đa 512 token cho mỗi câu đầu vào. Một câu dài hơn giới hạn này có thể bị cắt khi tính embedding, dù nội dung xuất ra vẫn đầy đủ.
+- Semantic chunking phụ thuộc vào ngưỡng, chất lượng mô hình và cách nhận ranh giới câu; cần xem lại các ranh giới trong JSON xuất ra. Văn bản dài được chia thành nhiều lượt gửi embedding và gộp vector theo số token. Ngưỡng tương đồng cũ cần được đánh giá lại với model mới.
 - Chủ đề được trích từ cụm từ trong chunk, nên có thể chưa diễn đạt trọn ý hoặc chọn một ý phụ khi chunk chứa nhiều chủ đề. Có thể cần cải thiện cách trích chủ đề ở các phiên bản sau.
 - DOCX không cung cấp số trang ổn định trước khi dàn trang; `pages` sẽ là `[]`, `page_start`/`page_end` là `null`.
 - Mục chỉ có tiêu đề và không có nội dung sẽ không sinh chunk riêng.
@@ -125,9 +125,9 @@ Bố cục dashboard và bảng màu tham khảo nằm trong [design.md](design.
 
 ## Chạy trên Railway
 
-Khi bấm **Phân tích**, ứng dụng nhận file rồi xử lý trong nền; trang tự hỏi tiến độ và hiện chunk khi hoàn tất. Việc tải embedding model lần đầu có thể lâu hơn các lần sau nhưng không giữ một yêu cầu HTTP mở suốt quá trình. Nếu Railway thay phiên chạy giữa chừng, trang sẽ báo phiên phân tích đã mất và bạn có thể bấm **Phân tích** lại.
+Khi bấm **Phân tích**, ứng dụng nhận file rồi xử lý trong nền; trang tự hỏi tiến độ và hiện chunk khi hoàn tất. Embedding được gửi theo lô tới OpenAI API. Nếu Railway thay phiên chạy giữa chừng, trang sẽ báo phiên phân tích đã mất và bạn có thể bấm **Phân tích** lại.
 
-Railway tải model `intfloat/multilingual-e5-small` trong lúc build và đóng gói model vào ứng dụng. Khi xử lý, model chạy bằng CPU và được giữ trong RAM của tiến trình. Bản build lớn hơn và cần tải model trong lúc build; tốc độ xử lý phụ thuộc CPU/RAM trên Railway. Chạy local tiếp tục dùng cache model như trước nếu không có thư mục `embedding_model`.
+Embedding sử dụng OpenAI API với model `text-embedding-3-small` (đổi bằng biến `OPENAI_EMBEDDING_MODEL`). Cần cấu hình `OPEN_AI_API_KEY` trên máy chủ. Văn bản được gửi tới OpenAI để tạo embedding; việc này phát sinh chi phí API và ngưỡng chia đoạn cần được đánh giá lại với model mới.
 
 Railway dùng `Procfile` để chạy `python app.py`. Ứng dụng tự nghe trên `0.0.0.0` và cổng từ biến môi trường `PORT`; khi chạy trên máy cá nhân vẫn dùng `127.0.0.1:8765`. Nếu Railway đã có Start Command riêng, đặt nó thành `python app.py` hoặc bỏ giá trị cũ để Railpack đọc `Procfile`.
 

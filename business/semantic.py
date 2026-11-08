@@ -5,22 +5,86 @@ from __future__ import annotations
 import math
 import re
 from functools import lru_cache
-from pathlib import Path
+import json
+import os
+import time
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from typing import Any
 
 
-MODEL_ID = "intfloat/multilingual-e5-small"
-MODEL_PATH = Path(__file__).resolve().parent.parent / "embedding_model"
+MODEL_ID = os.environ.get("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 SENTENCE_END = re.compile(r"(?<=[.!?。！？])\s+")
+
+
+class APIEmbedder:
+    """Embed token batches remotely while retaining one vector per input."""
+
+    def encode(self, texts, normalize_embeddings=True):
+        import tiktoken
+        import numpy as np
+        from business.llm_tag_match import api_key
+
+        key = api_key()
+        if not key:
+            raise RuntimeError("Chưa cấu hình OPEN_AI_API_KEY trên máy chủ")
+        tokenizer = tiktoken.get_encoding("cl100k_base")
+        parts, owners = [], []
+        for index, text in enumerate(texts):
+            text = text.removeprefix("query: ")
+            tokens = tokenizer.encode(text, disallowed_special=())
+            if not tokens:
+                raise ValueError("Không thể tạo embedding cho văn bản rỗng")
+            for offset in range(0, len(tokens), 8000):
+                part = tokens[offset:offset + 8000]
+                parts.append(part)
+                owners.append((index, len(part)))
+        sums = [None] * len(texts)
+        weights = [0] * len(texts)
+        start = 0
+        while start < len(parts):
+            end, token_count = start, 0
+            while end < len(parts) and end - start < 128 and token_count + len(parts[end]) <= 100000:
+                token_count += len(parts[end])
+                end += 1
+            body = json.dumps({"model": MODEL_ID, "input": parts[start:end]}).encode()
+            request = Request("https://api.openai.com/v1/embeddings", data=body,
+                              headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
+            for attempt in range(4):
+                try:
+                    with urlopen(request, timeout=90) as response:
+                        data = json.load(response)
+                    break
+                except HTTPError as exc:
+                    if exc.code in (429, 500, 502, 503, 504) and attempt < 3:
+                        time.sleep(2 ** attempt)
+                        continue
+                    raise RuntimeError(f"OpenAI embedding API lỗi HTTP {exc.code}") from exc
+                except (URLError, TimeoutError) as exc:
+                    if attempt < 3:
+                        time.sleep(2 ** attempt)
+                        continue
+                    raise RuntimeError("Không kết nối được OpenAI embedding API") from exc
+            items = sorted(data["data"], key=lambda item: item["index"])
+            if len(items) != end - start or [item["index"] for item in items] != list(range(end - start)):
+                raise RuntimeError("OpenAI embedding API trả về dữ liệu không đầy đủ")
+            for item, (index, weight) in zip(items, owners[start:end]):
+                vector = np.asarray(item["embedding"], dtype=float) * weight
+                sums[index] = vector if sums[index] is None else sums[index] + vector
+                weights[index] += weight
+            start = end
+        result = []
+        for vector, weight in zip(sums, weights):
+            vector = vector / weight
+            norm = np.linalg.norm(vector)
+            result.append(vector / norm if normalize_embeddings and norm else vector)
+        return result
 
 
 @lru_cache(maxsize=1)
 def local_model():
-    try:
-        from sentence_transformers import SentenceTransformer
-    except ImportError as exc:
-        raise RuntimeError("Chưa cài embedding. Chạy: python -m pip install -r requirements.txt") from exc
-    return SentenceTransformer(str(MODEL_PATH) if MODEL_PATH.is_dir() else MODEL_ID, device="cpu")
+    # Kept as an internal compatibility name for existing callers.
+    return APIEmbedder()
 
 
 def _units(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -70,7 +134,7 @@ def _build_chunk(base: dict[str, Any], blocks: list[dict[str, Any]], index: int,
 def split_semantic(chunks: list[dict[str, Any]], *, threshold: float = 0.85, embedder: Any = None) -> list[dict[str, Any]]:
     if not 0.5 <= threshold <= 0.95:
         raise ValueError("Ngưỡng ngữ nghĩa phải nằm trong khoảng 0.50–0.95")
-    # E5 recommends the query prefix for symmetric similarity comparisons.
+    # The API embedder receives the same text units as the local implementation.
     model = embedder or local_model()
     prepared = []
     all_sentences = []
@@ -79,7 +143,7 @@ def split_semantic(chunks: list[dict[str, Any]], *, threshold: float = 0.85, emb
         sentences = [(i, block) for i, block in enumerate(units) if block["kind"] == "paragraph"]
         prepared.append((chunk, units, sentences))
         all_sentences.extend(block["text"] for _, block in sentences)
-    # Encode the document in one call; SentenceTransformer batches internally.
+    # The API embedder batches inputs to limit request size.
     # Repeated calls for every section add substantial overhead on shared CPUs.
     all_vectors = model.encode(["query: " + text for text in all_sentences], normalize_embeddings=True) if all_sentences else []
     output = []

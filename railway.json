@@ -1,7 +1,0 @@
-{
-  "$schema": "https://railway.com/railway.schema.json",
-  "build": {
-    "builder": "RAILPACK",
-    "buildCommand": "python prepare_embedding_model.py"
-  }
-}
