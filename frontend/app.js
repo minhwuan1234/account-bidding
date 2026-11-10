@@ -32,8 +32,8 @@ function addRunUsage(usage,id=activeRun?.id){if(!activeRun||activeRun.id!==id)re
 function finishRun(note){if(!activeRun)return;activeRun.endedAt=performance.now();activeRun.note=note;runHistory.unshift(activeRun);activeRun=null;updateRunButton();clearInterval(metricsTimer);metricsTimer=null;renderRunMetrics()}
 function showTagPreview(button,topic,chunks,event){tagPreview.replaceChildren(el('strong','',topic),el('span','',chunks.map(item=>item.text).join('\n\n').slice(0,2500)));tagPreview.hidden=false;const rect=button.getBoundingClientRect(),x=event&&Number.isFinite(event.clientX)?event.clientX:rect.left,y=event&&Number.isFinite(event.clientY)?event.clientY:rect.bottom;tagPreview.style.left=Math.max(12,Math.min(x+14,innerWidth-tagPreview.offsetWidth-12))+'px';tagPreview.style.top=Math.max(12,Math.min(y+18,innerHeight-tagPreview.offsetHeight-12))+'px'}
 function hideTagPreview(){tagPreview.hidden=true}
-function setTab(name){for(const tab of ['analysis','library']){const selected=tab===name;document.querySelector('#tab-'+tab).setAttribute('aria-selected',String(selected));document.querySelector('#tab-panel-'+tab).hidden=!selected}document.querySelector('#tab-'+name).focus()}
-for(const tab of ['analysis','library'])document.querySelector('#tab-'+tab).onclick=()=>setTab(tab);
+function setTab(name){for(const tab of ['analysis','history','library']){const selected=tab===name;document.querySelector('#tab-'+tab).setAttribute('aria-selected',String(selected));document.querySelector('#tab-panel-'+tab).hidden=!selected}document.querySelector('#tab-'+name).focus();if(name==='history')loadBidHistory()}
+for(const tab of ['analysis','history','library'])document.querySelector('#tab-'+tab).onclick=()=>setTab(tab);
 reviewButton.onclick=()=>{if(latest.length&&!tagDialog.open)tagDialog.showModal()};
 document.querySelector('#close-tags').onclick=()=>tagDialog.close();
 tagDialog.onclick=event=>{if(event.target===tagDialog)tagDialog.close()};
