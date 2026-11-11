@@ -77,7 +77,7 @@ class BidReportTests(unittest.TestCase):
             {"label": "Hạn hoàn thành dự án", "value": "tháng 12/2026"},
         ]))
 
-    def test_project_completion_milestone_fills_missing_brief_fact(self):
+    def test_timeline_keeps_only_bid_milestones(self):
         documents = [{"file": "rfq.docx", "chunks": [{"id": "scope", "file": "rfq.docx",
             "text": "Final project delivery is due on 01/12/2026.",
             "labels": {"topics": ["Delivery"]}}]}]
@@ -91,7 +91,9 @@ class BidReportTests(unittest.TestCase):
             if name == "timeline_milestones":
                 return model_response({"deadlines": [{"label": "Final project delivery",
                     "value": "01/12/2026", "note": "", "relative_to": "", "offset_days": None,
-                    "conditional": False, "source_chunk_ids": ["scope"]}]})
+                    "conditional": False, "source_chunk_ids": ["scope"]},
+                    {"kind": "submission", "label": "", "value": "01/10/2026", "note": "", "relative_to": "",
+                     "offset_days": None, "conditional": False, "source_chunk_ids": ["scope"]}]})
             if name == "submission_documents":
                 return model_response({"requirements": []})
             if name == "evaluation_scan":
@@ -102,10 +104,8 @@ class BidReportTests(unittest.TestCase):
 
         with TemporaryDirectory() as folder:
             report = generate_report(documents, [], db_path=Path(folder) / "library.sqlite3", requester=requester)
-        self.assertEqual(report["project_facts"]["project_deadline"], {
-            "detail": "Final project delivery: 01/12/2026", "source_chunk_ids": ["scope"]})
-        self.assertFalse(any("hoàn thành dự án" in question.lower()
-                             for question in report["clarification_questions"]))
+        self.assertEqual([item["label"] for item in report["deadlines"]], ["Hạn nộp hồ sơ thầu"])
+        self.assertEqual(report["project_facts"]["project_deadline"], {"detail": "", "source_chunk_ids": []})
 
     def test_document_review_merges_equivalent_names_and_corrects_category(self):
         candidates = [
@@ -159,7 +159,7 @@ class BidReportTests(unittest.TestCase):
                     "title": "Giấy đăng ký doanh nghiệp", "category": "Hồ sơ công ty"}]})
             if name == "timeline_milestones":
                 if any(month_quote in segment["text"] for segment in payload["source_chunks"]):
-                    return model_response({"deadlines": [{"label": "Bắt đầu giai đoạn thử nghiệm",
+                    return model_response({"deadlines": [{"kind": "submission", "label": "",
                         "value": "11/2026", "note": "", "relative_to": "", "offset_days": None,
                         "conditional": False, "source_chunk_ids": ["long"]}]})
                 return model_response({"deadlines": []})
@@ -202,7 +202,7 @@ class BidReportTests(unittest.TestCase):
             if name == "submission_documents":
                 return model_response({"requirements": []})
             if name == "timeline_milestones":
-                return model_response({"deadlines": [{"label": "Hạn giao sản phẩm", "value": "01/06/2026",
+                return model_response({"deadlines": [{"kind": "submission", "label": "", "value": "01/06/2026",
                     "note": "", "source_chunk_ids": ["scope"]}]})
             if name != "bid_brief":
                 self.assertEqual(request["model"], "gpt-6-luna")
@@ -274,9 +274,9 @@ class BidReportTests(unittest.TestCase):
                 if name == "timeline_milestones":
                     self.assertEqual([chunk["id"] for chunk in payload["source_chunks"]], ["req", "rejected"])
                     return model_response({"deadlines": [
-                        {"label": "Hạn nộp", "value": "22/10/2026", "note": "",
+                        {"kind": "submission", "label": "Hạn nộp", "value": "22/10/2026", "note": "",
                          "source_chunk_ids": ["rejected"]},
-                        {"label": "Bịa", "value": "01/01/2030", "note": "",
+                        {"kind": "questions_due", "label": "Bịa", "value": "01/01/2030", "note": "",
                          "source_chunk_ids": ["invented"]}]})
                 if name != "bid_brief":
                     self.assertEqual([chunk["id"] for chunk in payload["source_chunks"]], ["req", "rejected"])
@@ -317,11 +317,11 @@ class BidReportTests(unittest.TestCase):
             self.assertEqual(report["scope"]["content_provider"], {"detail": "", "source_chunk_ids": []})
             self.assertEqual(report["evaluation_method"]["criteria"], [{"name": "Kinh nghiệm", "weight": "40%",
                 "detail": "", "source_chunk_ids": ["rejected"]}])
-            self.assertEqual([item["label"] for item in report["deadlines"]], ["Hạn nộp"])
+            self.assertEqual([item["label"] for item in report["deadlines"]], ["Hạn nộp hồ sơ thầu"])
             self.assertEqual(report["project_facts"]["audience"]["detail"], "Nhà tuyển chọn.")
             self.assertEqual(report["project_facts"]["project_deadline"], {"detail": "", "source_chunk_ids": []})
             self.assertEqual(report["clarification_questions"], [
-                "Hạn hoàn thành dự án là ngày nào? (Hồ sơ mới nêu hạn nộp: 22/10/2026.)",
+                "Hạn hoàn thành dự án là ngày nào? (Hồ sơ mới nêu hạn nộp hồ sơ thầu: 22/10/2026.)",
                 "Hồ sơ dự thầu cần nộp theo hình thức nào (qua cổng điện tử, email hay trực tiếp)?",
                 "Phạm vi công việc cụ thể gồm những hạng mục và sản phẩm bàn giao nào?",
             ])
