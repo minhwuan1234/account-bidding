@@ -40,3 +40,5 @@
 .report-evaluation-other{margin:18px 0}.report-evaluation-other>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;list-style:none;cursor:pointer;padding:10px 12px;background:#f2f9fc;border:1px solid #dcebf1;border-radius:11px;font-weight:800}.report-evaluation-other>summary::-webkit-details-marker{display:none}.report-evaluation-other>summary::after{content:"⌄";font-size:20px;line-height:1;color:#598095}.report-evaluation-other[open]>summary::after{content:"⌃"}.report-evaluation-other[open]>summary{margin-bottom:12px}
 
 .report-date-line{display:flex;align-items:baseline;gap:7px}.report-date-year{font-size:15px;line-height:1.3;font-weight:700;color:#68818d}.report-date-value{gap:5px}.report-date-secondary{font-size:13px}
+
+.report-eligibility{border-left:4px solid #1cb0f6;padding:4px 0 4px 16px}.report-eligibility h3{font-size:17px;font-weight:800;color:#176b91}.report-eligibility .report-objective-list>li{font-weight:600}
