@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from business.bid_report import (_finalize_document_requirements, _project_deadline_question,
+from business.bid_report import (_merge_evaluation_results, _finalize_document_requirements, _project_deadline_question,
                         _resolve_deadlines,
                         _review_document_requirements, _source_order_for_quote,
                         document_batches, generate_report)
@@ -328,6 +328,17 @@ class BidReportTests(unittest.TestCase):
             self.assertEqual(report["source_files"], ["rfq.docx"])
             self.assertEqual(len(report["usage_events"]), 10)
             self.assertAlmostEqual(report["usage"]["estimated_cost_usd"], 0.0002)
+
+
+class EvaluationRulesKindTests(unittest.TestCase):
+    def test_eligibility_rules_come_first_and_default_to_evaluation(self):
+        batch = [{"id": "c1", "text": "Only Canadian suppliers may bid. Scores are weighed 60/40."}]
+        response = {"rules": [
+            {"kind": "evaluation", "detail": "Điểm kỹ thuật 60, giá 40", "evidence_quote": "weighed 60/40", "source_chunk_ids": ["c1"]},
+            {"kind": "eligibility", "detail": "Chỉ nhà cung cấp Canada được nộp", "evidence_quote": "Only Canadian suppliers may bid", "source_chunk_ids": ["c1"]},
+        ], "criteria": []}
+        result = _merge_evaluation_results([response], [batch])
+        self.assertEqual([rule["kind"] for rule in result["rules"]], ["eligibility", "evaluation"])
 
 
 if __name__ == "__main__":
