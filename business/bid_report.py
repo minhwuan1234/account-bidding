@@ -598,10 +598,18 @@ def generate_report(documents: list[dict[str, Any]], matches: list[dict[str, Any
     if not chunks:
         raise ValueError("Tài liệu không có nội dung để tạo bản tổng hợp")
     files: list[dict[str, Any]] = []
-    request, report_truncated = build_request(chunks, matches, files)
-    sow_source, sow_truncated = _source_chunks(chunks)
     doc_batches = document_batches(chunks)
-    requests = {"bid_brief": request, **{field: build_sow_request(field, sow_source) for field in SOW_PROMPTS}}
+    if not doc_batches:
+        raise ValueError("Tài liệu không có nội dung để tạo bản tổng hợp")
+    # Each specialist receives every source segment, in bounded batches.
+    requests = {}
+    for index, batch in enumerate(doc_batches):
+        brief, _ = build_request([], matches, files)
+        brief["input"] = json.dumps({"source_chunks": batch}, ensure_ascii=False)
+        requests["bid_brief" if index == 0 else f"bid_brief_{index}"] = brief
+        for field in SOW_PROMPTS:
+            name = field if index == 0 else f"{field}_batch_{index}"
+            requests[name] = build_sow_request(field, batch)
     requests.update({f"timeline_milestones_{index}": build_timeline_request(batch)
                      for index, batch in enumerate(doc_batches)})
     requests.update({f"submission_documents_{index}": build_document_request(batch)
@@ -641,20 +649,56 @@ def generate_report(documents: list[dict[str, Any]], matches: list[dict[str, Any
                 on_progress("done", label(name))
     if on_progress:
         on_progress("running", "Đang tổng hợp và kiểm tra nguồn")
-    report = _response_json(responses["bid_brief"], "bản tổng hợp")
-    sow = {field: _response_json(responses[field], field) for field in SOW_PROMPTS}
-    request_input = json.loads(request["input"])
-    report_source_ids = {chunk.get("id") for chunk in request_input["source_chunks"]}
-    sow_source_ids = {chunk.get("id") for chunk in sow_source}
-    sow_source_text = {chunk.get("id"): chunk.get("text", "") for chunk in sow_source}
+    briefs = [_response_json(responses["bid_brief" if index == 0 else f"bid_brief_{index}"], "bản tổng hợp")
+              for index in range(len(doc_batches))]
+    report = dict(briefs[0])
+    for key in ("title", "buyer", "source_language", "submission"):
+        report[key] = next((str(item.get(key, "")).strip() for item in briefs if str(item.get(key, "")).strip()), "")
+    report["overview"] = "\n".join(dict.fromkeys(str(item.get("overview", "")).strip()
+                                                   for item in briefs if str(item.get("overview", "")).strip()))
+    report["project_facts"] = {}
+    for key in ("audience", "project_deadline"):
+        entries = []
+        for batch, brief in zip(doc_batches, briefs):
+            facts = brief.get("project_facts") or {}
+            item = facts.get(key) or {}
+            ids = {chunk["id"] for chunk in batch}
+            cited = [value for value in item.get("source_chunk_ids", []) if value in ids]
+            detail = str(item.get("detail", "")).strip()
+            if detail and cited:
+                entries.append((detail, cited))
+        report["project_facts"][key] = {"detail": "\n".join(dict.fromkeys(x[0] for x in entries)),
+                                        "source_chunk_ids": list(dict.fromkeys(v for _, ids in entries for v in ids))}
+    sow = {}
+    for field in SOW_PROMPTS:
+        entries = []
+        for index, batch in enumerate(doc_batches):
+            name = field if index == 0 else f"{field}_batch_{index}"
+            result = _response_json(responses[name], field)
+            ids = {chunk["id"] for chunk in batch}
+            if field == "work_details":
+                for item in result.get("items", []):
+                    if isinstance(item, dict):
+                        item["source_chunk_ids"] = [value for value in item.get("source_chunk_ids", []) if value in ids]
+                        if item["source_chunk_ids"]:
+                            entries.append(item)
+            else:
+                cited = [value for value in result.get("source_chunk_ids", []) if value in ids]
+                detail = str(result.get("detail", "")).strip()
+                if detail and cited:
+                    entries.append((detail, cited))
+        if field == "work_details":
+            sow[field] = {"items": entries}
+        else:
+            sow[field] = {"detail": "\n".join(dict.fromkeys(x[0] for x in entries)),
+                          "source_chunk_ids": list(dict.fromkeys(v for _, ids in entries for v in ids))}
+    report_source_ids = {chunk.get("id") for chunk in chunks}
+    sow_source_ids = report_source_ids
+    sow_source_text = {chunk.get("id"): chunk.get("text", "") for chunk in chunks}
     report["scope"] = {}
     for key in ("objective", "arrangement", "content_provider", "bid_submission_method"):
         item = sow[key]
-        if not isinstance(item, dict):
-            item = {}
-        cited = [value for value in item.get("source_chunk_ids", []) if value in sow_source_ids]
-        detail = str(item.get("detail", "")).strip() if cited else ""
-        report["scope"][key] = {"detail": detail, "source_chunk_ids": cited if detail else []}
+        report["scope"][key] = item
     evaluation_responses = [_response_json(responses[f"evaluation_scan_{index}"], "cách đánh giá hồ sơ")
                             for index in range(len(doc_batches))]
     report["evaluation_method"] = _merge_evaluation_results(evaluation_responses, doc_batches)
@@ -673,8 +717,10 @@ def generate_report(documents: list[dict[str, Any]], matches: list[dict[str, Any
             detail = str(item.get("detail", "")).strip()
             if detail and not _literal_in_sources(detail, item_sources, sow_source_text):
                 detail = ""
-            report["scope_table"].append({"item": name, "quantity": quantity,
-                                          "detail": detail, "source_chunk_ids": item_sources})
+            entry = {"item": name, "quantity": quantity, "detail": detail, "source_chunk_ids": item_sources}
+            if not any((existing["item"], existing["quantity"], existing["detail"]) == (name, quantity, detail)
+                       for existing in report["scope_table"]):
+                report["scope_table"].append(entry)
     facts = report.get("project_facts") if isinstance(report.get("project_facts"), dict) else {}
     report["project_facts"] = {}
     for key in ("audience", "project_deadline", "bid_submission_method"):
@@ -760,7 +806,7 @@ def generate_report(documents: list[dict[str, Any]], matches: list[dict[str, Any
     if not report["scope_table"]:
         questions.append("Phạm vi công việc cụ thể gồm những hạng mục và sản phẩm bàn giao nào?")
     report["clarification_questions"] = questions
-    report["source_truncated"] = report_truncated or sow_truncated
+    report["source_truncated"] = False
     report["source_files"] = sorted({chunk.get("file", "") for chunk in chunks if chunk.get("file")})
     report["usage"] = summarize_usage(responses["bid_brief"])
     report["usage_events"] = [usage for response in responses.values()
