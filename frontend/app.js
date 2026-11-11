@@ -21,7 +21,7 @@ async function loadBidHistory(){
  const wrap=el('div','history-table-wrap'),table=el('table','history-table'),thead=el('thead'),header=el('tr');for(const label of ['Bid','Bên mời thầu','Hạn nộp','Hồ sơ',''])header.append(el('th','',label));thead.append(header);table.append(thead);const body=el('tbody');
  for(const bid of data.bids){const row=el('tr'),name=el('td'),created=new Date(bid.created_at),buyer=el('td','',bid.buyer||'Chưa rõ'),dateCell=el('td'),docs=el('td'),actions=el('td','history-actions');name.append(el('strong','',bid.title));if(!Number.isNaN(created.getTime()))name.append(el('div','history-meta',created.toLocaleString('vi-VN')));
  const deadline=bid.submission_deadline;if(deadline?.value){dateCell.append(el('div','',deadline.value));const [label,cls]=deadline.conditional?['Theo điều kiện','unknown']:deadlineStatus(deadline.value);dateCell.append(el('span','report-date-status '+cls,label))}else dateCell.append(el('span','history-muted','Chưa rõ'));
- if(bid.has_report){const total=Number(bid.requirement_count)||0,selected=Number(bid.selected_count)||0;docs.append(el('span','report-status-tag '+(total&&selected===total?'has-file':'missing-file'),total?`Đã có ${selected}/${total}`:'Không có yêu cầu'))}else docs.append(el('span','history-muted','Chưa có báo cáo'));
+ if(bid.has_report){const total=Number(bid.requirement_count)||0,selected=Number(bid.selected_count)||0;docs.append(el('span','report-status-tag '+(total&&selected===total?'has-file':'missing-file'),total?`Đã chọn ${selected}/${total}`:'Không có yêu cầu'))}else docs.append(el('span','history-muted','Chưa có báo cáo'));
  const open=el('button','secondary','Mở'),remove=el('button','history-delete','Xóa');open.type=remove.type='button';open.onclick=()=>openBid(bid.id);remove.onclick=()=>deleteHistoryBid(bid);remove.setAttribute('aria-label',`Xóa bid ${bid.title}`);actions.append(open,remove);row.append(name,buyer,dateCell,docs,actions);body.append(row)}table.append(body);wrap.append(table);historyList.append(wrap);historyStatus.textContent=''
  }catch(error){historyStatus.className='error';historyStatus.textContent='Không tải được lịch sử: '+error.message}
 }
@@ -122,7 +122,7 @@ function renderLibrary(){
     const data=await response.json();if(!response.ok)throw Error(data.error||'Không xóa được tài liệu');
     library=library.filter(entry=>entry.id!==file.id);
     for(const item of latestMatch?.tag_matches||[]){item.suggestions=(item.suggestions||[]).filter(entry=>entry.file_id!==file.id);item.manual_files=(item.manual_files||[]).filter(entry=>entry.file_id!==file.id);item.selected_file_ids=(item.selected_file_ids||[]).filter(id=>id!==file.id)}
-    for(const item of latestReport?.requirements||[])item.file_ids=(item.file_ids||[]).filter(id=>id!==file.id);
+    for(const item of latestReport?.requirements||[]){if((item.file_ids||[]).includes(file.id))delete item.match_result;item.file_ids=(item.file_ids||[]).filter(id=>id!==file.id)}
     for(const edit of reportOverrides.values())edit.file_ids=edit.file_ids.filter(id=>id!==file.id);
     renderLibrary();updateOverview();if(latestMatch)renderTagResults(latestMatch.tag_matches||[]);if(latestReport)renderBidReport();scheduleBidSave();
     libraryStatus.className='';libraryStatus.textContent=`Đã xóa ${file.filename} khỏi thư viện.`;
@@ -229,17 +229,19 @@ function renderBidReport(){
    const row=el('article','report-check-row'),head=el('div','report-check-row-head'),rowKey=reportKey(item);row.dataset.reportKey=rowKey;
    head.append(el('h4','',item.title));
    const selected=library.filter(file=>(item.file_ids||[]).includes(file.id));
-   head.append(el('span','report-status-tag '+(selected.length?'has-file':'missing-file'),selected.length?'Đã có':'Thiếu'));row.append(head);
+   const match=item.match_result,checks=match?.items||[],matched=checks.filter(check=>check.status==='matched').length,complete=checks.length>0&&matched===checks.length&&!match?.incomplete;const badge=!selected.length?'Thiếu':!checks.length?'Chưa đối chiếu':complete?'Đã có':`${matched}/${checks.length}`;head.append(el('span','report-status-tag '+(complete?'has-file':'missing-file'),badge));row.append(head);if(item.detail){const requirements=el('div','report-requirements');requirements.append(el('strong','','Yêu cầu:'));const list=el('ul');for(const line of item.detail.split(/\n+/).map(value=>value.replace(/^\s*[-•*]\s*/, '').trim()).filter(Boolean))list.append(el('li','',line));requirements.append(list);row.append(requirements)}
    if(selected.length)row.append(el('div','report-file-summary','File đã chọn: '+selected.slice(0,2).map(file=>file.filename).join(' · ')+(selected.length>2?` · +${selected.length-2} file`:'')));
    const detail=el('details','report-item-details');detail.append(el('summary','','Chọn file liên quan'));
    const body=el('div','report-item-body');
    const options=el('div','report-file-options');
    for(const file of library){
     const label=el('label'),input=el('input');input.type='checkbox';input.checked=(item.file_ids||[]).includes(file.id);
-    input.onchange=()=>{item.file_ids=input.checked?[...new Set([...(item.file_ids||[]),file.id])]:item.file_ids.filter(id=>id!==file.id);rememberReportEdit(item);renderBidReport();const current=[...document.querySelectorAll('.report-check-row')].find(entry=>entry.dataset.reportKey===rowKey);if(current)current.querySelector('.report-item-details').open=true};
+    input.onchange=()=>{delete item.match_result;item.file_ids=input.checked?[...new Set([...(item.file_ids||[]),file.id])]:item.file_ids.filter(id=>id!==file.id);rememberReportEdit(item);renderBidReport();const current=[...document.querySelectorAll('.report-check-row')].find(entry=>entry.dataset.reportKey===rowKey);if(current)current.querySelector('.report-item-details').open=true};
     label.append(input,document.createTextNode(file.filename));options.append(label)
    }
    if(!library.length)options.append(el('p','report-note','Thư viện chưa có file.'));body.append(options);
+   if(selected.length){const matchButton=el('button','secondary','Đối chiếu file đã chọn'),message=el('p','report-note');matchButton.type='button';matchButton.onclick=async()=>{const ids=[...(item.file_ids||[])],bidId=activeBidId;matchButton.disabled=true;message.textContent='Đang đối chiếu nội dung file…';try{const response=await fetch('/api/document-match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:item.title,detail:item.detail||'',file_ids:ids})});const result=await response.json();if(!response.ok)throw Error(result.error||'Không đối chiếu được');if(activeBidId!==bidId||JSON.stringify(item.file_ids||[])!==JSON.stringify(ids))return;item.match_result=result;scheduleBidSave();renderBidReport();const current=[...document.querySelectorAll('.report-check-row')].find(entry=>entry.dataset.reportKey===rowKey);if(current)current.querySelector('.report-item-details').open=true}catch(error){message.textContent='Lỗi đối chiếu: '+error.message}finally{matchButton.disabled=false}};body.append(matchButton,message)}
+   if(checks.length){const list=el('ul','report-match-results');for(const check of checks){const li=el('li','',`${check.status==='matched'?'✓ Có bằng chứng':'• Chưa xác nhận'}: ${check.requirement}`);if(check.status==='matched')li.append(el('div','report-note',`${check.filename}: ${check.evidence_quote}`));else if(check.explanation)li.append(el('div','report-note',check.explanation));list.append(li)}body.append(list)}if(match?.incomplete)body.append(el('p','report-note','Một số file chưa được đọc đầy đủ hoặc không trích được chữ; cần kiểm tra thêm.'));
    const source=sourceDetails(item.source_chunk_ids||[]);if(source)body.append(source);
    detail.append(body);row.append(detail);group.append(row)
   }

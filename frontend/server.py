@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, urlparse
 from business.analysis_jobs import get as get_analysis_job, submit as submit_analysis_job
 from business.bid_history import create_bid, delete_bid, get_bid, list_bids, update_bid
 from business.bid_report import generate_report
+from business.document_matching import compare_requirement
 from business.chunker import chunk_file
 from business.library_service import add_document, delete_document, list_documents, update_document_description
 from business.llm_tag_match import MODEL, has_api_key, match_one_tag
@@ -112,6 +113,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/library": self.post_library,
             "/api/library-description": self.post_library_description,
             "/api/llm-match-tag": self.post_match_tag,
+            "/api/document-match": self.post_document_match,
             "/api/bid-report": self.post_bid_report,
             "/api/bid-report-job": self.post_bid_report_job,
             "/api/bids": self.post_bid,
@@ -171,6 +173,10 @@ class Handler(BaseHTTPRequestHandler):
         if not update_document_description(payload["id"], payload["description_md"]):
             raise ValueError("Không tìm thấy file trong thư viện")
         self.respond_json(200, {"ok": True})
+
+    def post_document_match(self, url):
+        payload = json.loads(self.read_body(65536))
+        self.respond_json(200, compare_requirement(payload.get("title"), payload.get("detail"), payload.get("file_ids")))
 
     def post_match_tag(self, url):
         payload = json.loads(self.read_body())

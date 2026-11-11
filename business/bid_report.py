@@ -419,6 +419,11 @@ def build_document_request(source_chunks: list[dict[str, Any]]) -> dict[str, Any
             "báo giá hoặc bằng chứng mà bên dự thầu phải NỘP. Không bỏ sót yêu cầu nằm trong bảng, "
             "chú thích hoặc danh sách. Giữ nguyên điều kiện số lượng, chữ ký, thời hạn hiệu lực, "
             "định dạng và ngôn ngữ trong detail nếu chúng gắn với một tài liệu phải nộp. "
+            "Trong detail liệt kê rõ từng điều kiện có trong nguồn: số lượng dự án, khoảng thời gian, "
+            "vai trò nhân sự, số năm kinh nghiệm, bằng cấp, thư giới thiệu, hợp đồng, chữ ký và mẫu liên quan. "
+            "Quét cả Annex, phụ lục và form; ghi đúng tên hoặc số biểu mẫu khi nguồn liên hệ đến hồ sơ này. "
+            "Mỗi điều kiện một dòng bắt đầu bằng dấu gạch đầu dòng; chỉ ghi thông tin có bằng chứng, "
+            "không tự tạo số năm, số lượng hoặc yêu cầu không có trong tài liệu. "
             "Không đưa điều khoản hợp đồng, công việc vendor thực hiện sau trúng thầu, hoặc chỉ dẫn "
             "chung không đòi một tài liệu riêng vào requirements. Chỉ có hai nhóm: "
             "Hồ sơ công ty gồm đăng ký/chứng nhận pháp lý, hồ sơ năng lực công ty và nhân sự, "
@@ -500,8 +505,8 @@ def _merge_document_requirements(items: list[dict[str, Any]]) -> list[dict[str, 
         prior["file_ids"] = list(dict.fromkeys(prior["file_ids"] + item["file_ids"]))
         prior["_source_order"] = min(prior.get("_source_order", (10**9, 10**9)),
                                      item.get("_source_order", (10**9, 10**9)))
-        if len(item.get("detail", "")) > len(prior.get("detail", "")):
-            prior["detail"] = item["detail"]
+        prior["detail"] = "\n".join(dict.fromkeys(line.strip() for detail in
+            (prior.get("detail", ""), item.get("detail", "")) for line in detail.splitlines() if line.strip()))
         if not prior.get("reason") and item.get("reason"):
             prior["reason"] = item["reason"]
     for item in merged.values():
@@ -525,7 +530,8 @@ def _review_document_requirements(candidates: list[dict[str, Any]],
         item = dict(originals[0])
         item["title"] = str(group.get("title", "")).strip() or item["title"]
         item["category"] = group["category"]
-        item["detail"] = max((entry["detail"] for entry in originals), key=len)
+        item["detail"] = "\n".join(dict.fromkeys(line.strip() for entry in originals
+                                                for line in entry["detail"].splitlines() if line.strip()))
         item["source_chunk_ids"] = list(dict.fromkeys(
             source for entry in originals for source in entry["source_chunk_ids"]))
         item["file_ids"] = list(dict.fromkeys(
