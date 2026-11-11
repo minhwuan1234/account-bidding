@@ -46,3 +46,5 @@
 .report-requirements{margin:9px 0;color:#4e6b79;font-size:12px;line-height:1.5}.report-requirements strong{color:#293a43}.report-requirements ul,.report-match-results{margin:5px 0;padding-left:18px}.report-requirements li,.report-match-results li{margin:4px 0}.report-match-results{font-size:12px;line-height:1.5}.report-match-results .report-note{overflow-wrap:anywhere}
 
 .report-key-point,.report-product-name{color:#101820;font-weight:800}.report-table th.report-product-name{background:transparent;text-align:left}
+
+.report-evaluation-rules .report-rich-content{min-width:0;overflow-wrap:anywhere}
