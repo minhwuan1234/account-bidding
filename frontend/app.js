@@ -81,11 +81,12 @@ document.querySelector('#run').onclick=async()=>{
  try{
   const created=await fetch('/api/bids',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:activeBidTitle})});
   const createdData=await created.json();if(!created.ok)throw Error(createdData.error||'Không lưu được bid vào lịch sử');activeBidId=createdData.bid.id;
-  for(const file of selected){
-   let data;
-   try{data=await analyzeFile(file,semantic,threshold)}catch(error){errors.push(`${file.name}: ${error.message}`);appendProcessingLog('error',`${file.name}: ${error.message}`);continue}
-   latest.push(data);renderCandidates();await saveBidSnapshot('processing');
+  const results=await Promise.allSettled(selected.map(file=>analyzeFile(file,semantic,threshold)));
+  for(const [index,result] of results.entries()){
+   if(result.status==='fulfilled')latest.push(result.value);
+   else{const message=result.reason?.message||String(result.reason);errors.push(`${selected[index].name}: ${message}`);appendProcessingLog('error',`${selected[index].name}: ${message}`)}
   }
+  if(latest.length)renderCandidates();
   await saveBidSnapshot(latest.length?(errors.length?'partial':'processing'):'error');
   exportBtn.disabled=!latest.length;status.textContent=errors.length?'Lỗi: '+errors.join('; '):'';status.className=errors.length?'error':'';
   if(latest.length){setTab('analysis');await loadModelStatus();if(llmReady)generateBidReport();else{hideProcessingFiles();reportStatus.textContent='Chưa kết nối model để tạo bản tổng hợp.';finishRun('Chưa kết nối model')}}else{hideProcessingFiles();reportStatus.textContent='Không phân tích được tài liệu.';finishRun('Không phân tích được tài liệu')}

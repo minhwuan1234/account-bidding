@@ -13,10 +13,9 @@ from business.chunker import chunk_file
 from business.upload_service import mark_summary_unavailable, receive_rfp, summarize_rfp
 
 
-_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="document-analysis")
+_executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="document-analysis")
 _lock = threading.Lock()
 _jobs: dict[str, dict] = {}
-_MAX_JOBS = 8
 _JOB_TTL_SECONDS = 30 * 60
 
 
@@ -26,8 +25,6 @@ def submit(filename: str, body: bytes, semantic: bool, threshold: float) -> str:
         for job_id, job in list(_jobs.items()):
             if job["status"] in ("done", "error") and now - job["updated"] > _JOB_TTL_SECONDS:
                 del _jobs[job_id]
-        if len(_jobs) >= _MAX_JOBS:
-            raise RuntimeError("Máy chủ đang xử lý nhiều tài liệu. Hãy thử lại sau ít phút.")
         job_id = uuid.uuid4().hex
         _jobs[job_id] = {"status": "queued", "phase": "Đang lưu file", "updated": now}
     try:
@@ -38,7 +35,12 @@ def submit(filename: str, body: bytes, semantic: bool, threshold: float) -> str:
         raise
     with _lock:
         _jobs[job_id].update(phase="Đang chờ lượt phân tích", updated=time.monotonic())
-    _executor.submit(_run, job_id, filename, body, semantic, threshold, stored["id"])
+    try:
+        _executor.submit(_run, job_id, filename, body, semantic, threshold, stored["id"])
+    except Exception:
+        with _lock:
+            del _jobs[job_id]
+        raise
     return job_id
 
 
