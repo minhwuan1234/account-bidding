@@ -214,9 +214,4 @@ def chunk_file(path: str | Path, *, semantic: bool = False, threshold: float = 0
     if on_progress:
         on_progress("Đang tạo tag cho các đoạn")
     chunks = attach_labels(chunks, embedder=embedder)
-    from business.requirements_filter import mark_requirement_candidates
-
-    if on_progress:
-        on_progress("Đang phân loại các đoạn")
-    chunks = mark_requirement_candidates(chunks, embedder=embedder)
     return {"file": path.name, "format": suffix[1:], "mode": "semantic" if semantic else "structural", "chunk_count": len(chunks), "chunks": chunks}
