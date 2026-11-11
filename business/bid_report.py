@@ -127,15 +127,22 @@ SOW_PROMPTS = {
         "Không lấy loại hợp đồng hoặc deadline làm cách nộp. Nếu không ghi rõ, để trống."
     ),
     "work_details": (
-        "Chi tiết và khối lượng công việc: CHỈ CHÉP LẠI từ source_chunks, không diễn giải, không giải thích, "
-        "không dịch, không tóm tắt, không thêm nhận xét hay thông tin nào ngoài tài liệu. Giữ nguyên ngôn ngữ gốc. "
-        "Mỗi hạng mục sản phẩm/đầu ra (deliverable) vendor phải thực hiện hoặc bàn giao là một dòng: "
-        "item = tên hạng mục chép nguyên văn từ tài liệu (ví dụ ô trong bảng deliverables); "
-        "quantity = đơn vị, số lượng hoặc thời lượng chép nguyên văn, để trống nếu tài liệu không nêu; "
-        "detail = câu hoặc cụm từ chép nguyên văn từ tài liệu mô tả hạng mục đó (thời lượng, định dạng, "
-        "phạm vi bàn giao), để trống nếu không có. Chỉ lấy danh sách sản phẩm/đầu ra cần sản xuất; "
-        "không liệt kê các bước quy trình, mô tả nền hay giấy tờ nộp thầu. Không gộp các hạng mục khác "
-        "nhau thành một dòng và không lặp lại cùng một hạng mục."
+        "Chi tiết và khối lượng công việc: CHỈ liệt kê sản phẩm chính mà nhà thầu được yêu cầu "
+        "sản xuất hoặc thực hiện trong scope of work của dự án này; đây là phần việc bên dự thầu F "
+        "sẽ đảm nhận nếu trúng thầu. Chỉ coi F là nhà thầu, không suy đoán năng lực hay trách nhiệm "
+        "riêng của F ngoài những điều tài liệu quy định cho nhà thầu. Mỗi loại sản phẩm chính là một dòng "
+        "và phải có nguồn xác nhận nhà thầu thực hiện; ví dụ một loại video hoặc một loại sản phẩm "
+        "nội dung cụ thể. Không đưa vào bảng các bước sản xuất, công việc phối hợp hoặc quản lý, "
+        "hồ sơ nộp thầu, báo cáo hành chính, điều khoản hợp đồng, trách nhiệm của khách hàng, "
+        "hay bản bàn giao/thành phần đi kèm của một sản phẩm như video hoàn thiện, kịch bản, storyboard, "
+        "file nguồn, file âm thanh khi chúng chỉ là thành phần của sản phẩm chính. "
+        "Không liệt kê lặp một sản phẩm dưới dạng loại sản phẩm và dạng bản cuối của chính sản phẩm đó. "
+        "Nếu tài liệu xác định một hạng mục là sản phẩm chính độc lập phải sản xuất thì được liệt kê; "
+        "không tự loại nó chỉ vì tên trùng ví dụ trên. Không tự suy ra số lượng, thời lượng, đơn vị "
+        "hay phạm vi. item là tên sản phẩm chép nguyên văn; quantity là số lượng, thời lượng hoặc "
+        "đơn vị chép nguyên văn nếu nguồn nêu, nếu không để trống; detail là mô tả sản phẩm chép "
+        "nguyên văn nếu có, nếu không để trống. Giữ ngôn ngữ gốc và source_chunk_ids. "
+        "Không diễn giải, dịch hay thêm thông tin ngoài nguồn; không tìm thấy sản phẩm chính thì trả items rỗng."
     ),
 }
 
