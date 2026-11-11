@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -63,6 +64,19 @@ def _decode(row: dict, full: bool = False) -> dict:
     item = {"id": row["id"], "title": row["title"], "status": row["status"],
             "created_at": row["created_at"], "updated_at": row["updated_at"],
             "document_count": row["document_count"], "missing_count": row["missing_count"]}
+    if not full:
+        report = json.loads(row.get("report_json") or "null") or {}
+        requirements = report.get("requirements") or []
+        deadlines = report.get("deadlines") or []
+        submission = next((value for value in deadlines if value.get("kind") == "submission"), None)
+        if submission is None:
+            submission = next((value for value in deadlines if re.search(
+                r"hạn nộp|nộp hồ sơ|nộp báo giá|(?:bid|proposal|quotation|tender) submission|closing date",
+                str(value.get("label", "")), re.I)), None)
+        item.update(buyer=report.get("buyer") or "", submission_deadline=submission,
+                    requirement_count=len(requirements),
+                    selected_count=sum(bool(value.get("file_ids")) for value in requirements),
+                    has_report=bool(report))
     if full:
         item.update(documents=json.loads(row["documents_json"]),
                     matches=json.loads(row["matches_json"]), report=json.loads(row["report_json"]))
@@ -94,14 +108,14 @@ def list_bids(path: Path | None = None) -> list[dict]:
             _mysql_schema(connection)
             with connection.cursor() as cursor:
                 cursor.execute("SELECT id,title,status,created_at,updated_at,document_count,missing_count "
-                               "FROM bid_history ORDER BY created_at DESC, id DESC")
+                               " ,report_json FROM bid_history ORDER BY created_at DESC, id DESC")
                 columns = [entry[0] for entry in cursor.description]
                 rows = [dict(zip(columns, values)) for values in cursor.fetchall()]
     else:
         with _sqlite(path) as connection:
             rows = [dict(row) for row in connection.execute(
                 "SELECT id,title,status,created_at,updated_at,document_count,missing_count "
-                "FROM bid_history ORDER BY created_at DESC, id DESC")]
+                " ,report_json FROM bid_history ORDER BY created_at DESC, id DESC")]
     return [_decode(row) for row in rows]
 
 
@@ -149,3 +163,16 @@ def update_bid(bid_id: str, *, title: str, status: str, documents: list,
             found = cursor.rowcount > 0
     return {"id": bid_id, "title": title, "status": status, "updated_at": updated_at,
             "document_count": len(documents), "missing_count": missing_count} if found else None
+
+
+def delete_bid(bid_id: str, path: Path | None = None) -> bool:
+    if path is None and use_mysql():
+        with mysql_connect() as connection:
+            _mysql_schema(connection)
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM bid_history WHERE id = %s", (bid_id,))
+                deleted = cursor.rowcount > 0
+            connection.commit()
+            return deleted
+    with _sqlite(path) as connection:
+        return connection.execute("DELETE FROM bid_history WHERE id = ?", (bid_id,)).rowcount > 0

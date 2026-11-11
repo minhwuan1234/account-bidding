@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from database.bid_store import delete_bid as _delete_bid
 from database.bid_store import create_bid as _create_bid
 from database.bid_store import get_bid as _get_bid
 from database.bid_store import list_bids as _list_bids
@@ -25,3 +26,7 @@ def update_bid(bid_id: str, payload: dict) -> dict | None:
                        status=payload.get("status", "processing"),
                        documents=payload.get("documents", []), matches=payload.get("matches"),
                        report=payload.get("report"))
+
+
+def delete_bid(bid_id: str) -> bool:
+    return _delete_bid(bid_id)

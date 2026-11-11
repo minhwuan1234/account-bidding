@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from business.analysis_jobs import get as get_analysis_job, submit as submit_analysis_job
-from business.bid_history import create_bid, get_bid, list_bids, update_bid
+from business.bid_history import create_bid, delete_bid, get_bid, list_bids, update_bid
 from business.bid_report import generate_report
 from business.chunker import chunk_file
 from business.library_service import add_document, delete_document, list_documents, update_document_description
@@ -27,6 +27,19 @@ STATIC_ASSETS = {"/app.js": "text/javascript; charset=utf-8", "/styles.css": "te
 class Handler(BaseHTTPRequestHandler):
     def do_DELETE(self):
         url = urlparse(self.path)
+        if url.path == "/api/bids":
+            bid_id = parse_qs(url.query).get("id", [""])[0]
+            if not bid_id:
+                self.respond_json(400, {"error": "Thiếu ID bid"})
+                return
+            try:
+                if delete_bid(bid_id):
+                    self.respond_json(200, {"ok": True})
+                else:
+                    self.respond_json(404, {"error": "Không tìm thấy bid"})
+            except Exception as exc:
+                self.respond_json(503, {"error": str(exc)})
+            return
         if url.path != "/api/library":
             self.send_error(404)
             return
