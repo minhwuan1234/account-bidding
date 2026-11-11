@@ -177,6 +177,10 @@ def make_chunks(blocks: list[Block], filename: str) -> list[dict[str, Any]]:
             level = block.level or 1
             headings = [(n, title) for n, title in headings if n < level]
             headings.append((level, block.text))
+            # A heading can contain substantive information (e.g. a submission
+            # email) even when another heading follows immediately. Preserve it
+            # as source content as well as in the section path.
+            current.append(block)
         else:
             current.append(block)
     flush()
