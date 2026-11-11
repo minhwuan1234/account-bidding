@@ -74,7 +74,14 @@ WORK_SCHEMA = _object({"items": {"type": "array", "items": _object({
     "source_chunk_ids": {"type": "array", "items": {"type": "string"}},
 })}})
 
+TIMELINE_KINDS = {
+    "submission": "Hạn nộp hồ sơ thầu",
+    "questions_due": "Hạn gửi câu hỏi",
+    "answers_due": "Hạn khách trả lời câu hỏi",
+}
+
 TIMELINE_SCHEMA = _object({"deadlines": {"type": "array", "items": _object({
+    "kind": {"type": "string", "enum": list(TIMELINE_KINDS)},
     "label": {"type": "string"}, "value": {"type": "string"},
     "note": {"type": "string"},
     "relative_to": {"type": "string"},
@@ -159,19 +166,22 @@ def build_timeline_request(source_chunks: list[dict[str, Any]]) -> dict[str, Any
         "model": "gpt-6-luna", "store": False,
         "instructions": (
             SOW_COMMON +
-            "Tìm mọi mốc quan trọng của hồ sơ thầu và dự án: hạn nộp, hạn gửi câu hỏi, họp tiền thầu, "
-            "hạn giao sản phẩm, các giai đoạn thực hiện theo tháng hoặc mốc khác được ghi rõ. "
-            "Lấy cả mốc chỉ có tháng/năm và mốc có ngày cụ thể; mỗi mốc là một hàng với label ngắn. "
-            "Dùng 'câu hỏi' trong label thay cho 'yêu cầu làm rõ'. Nếu nguồn ghi đủ ngày tháng năm, "
+            "CHỈ tìm đúng 3 mốc sau, bỏ qua mọi mốc khác (họp tiền thầu, giao sản phẩm, giai đoạn dự án...): "
+            "kind='submission' là hạn nộp hồ sơ thầu/báo giá/proposal; "
+            "kind='questions_due' là hạn vendor gửi câu hỏi hoặc yêu cầu làm rõ; "
+            "kind='answers_due' là hạn bên mời thầu trả lời câu hỏi. "
+            "Mỗi kind tối đa một hàng; label để trống. Không có mốc nào thì bỏ qua kind đó. "
+            "Khi một mốc tính tương đối theo mốc khác trong 3 mốc này, relative_to là kind của mốc gốc "
+            "(submission, questions_due hoặc answers_due). Nếu nguồn ghi đủ ngày tháng năm, "
             "viết value theo DD/MM/YYYY, giữ nguyên giờ và múi giờ khi có. Nếu nguồn chỉ ghi tháng/năm, "
             "viết value theo MM/YYYY; chỉ ghi tháng thì viết 'tháng M'. Không tự thêm ngày hay năm còn thiếu. "
             "Không biến một khoảng nhiều tháng thành một ngày cụ thể. Với mốc tương đối "
             "N ngày trước/sau một mốc khác trong tài liệu, ghi nguyên văn thời hạn vào value, "
-            "relative_to bằng đúng label của mốc gốc và offset_days là số ngày có dấu "
+            "relative_to là kind của mốc gốc và offset_days là số ngày có dấu "
             "(trước là âm, sau là dương). Chỉ dùng ngày lịch; nếu nguồn nói ngày làm việc thì "
             "để relative_to rỗng và offset_days null. Ứng dụng sẽ tính ngày để tránh sai phép tính. "
             "Nếu hạn phản hồi là N ngày sau khi nhận câu hỏi và tài liệu có hạn gửi câu hỏi, "
-            "có thể dùng hạn gửi làm mốc MUỘN NHẤT: relative_to là label hạn gửi, "
+            "có thể dùng hạn gửi làm mốc MUỘN NHẤT: relative_to là questions_due, "
             "offset_days là N, conditional=true và note nêu rõ giả định nhận câu hỏi vào hạn gửi. "
             "Nếu mốc gốc chỉ có ngày/tháng mà thiếu năm, vẫn ghi relative_to và offset_days; "
             "ứng dụng sẽ tính ngày/tháng khi không có nhập nhằng về năm nhuận. Nếu mốc gốc "
@@ -674,33 +684,29 @@ def generate_report(documents: list[dict[str, Any]], matches: list[dict[str, Any
         cited = [value for value in item.get("source_chunk_ids", []) if value in report_source_ids]
         detail = str(item.get("detail", "")).strip() if cited else ""
         report["project_facts"][key] = {"detail": detail, "source_chunk_ids": cited if detail else []}
-    report["deadlines"] = []
-    seen_deadlines: set[tuple[str, str]] = set()
+    found: dict[str, dict[str, Any]] = {}
     for index, batch in enumerate(doc_batches):
         timeline = _response_json(responses[f"timeline_milestones_{index}"], "các mốc thời gian")
         batch_ids = {chunk["id"] for chunk in batch}
         for item in timeline.get("deadlines", []):
-            if not isinstance(item, dict):
+            if not isinstance(item, dict) or item.get("kind") not in TIMELINE_KINDS:
                 continue
+            kind = item["kind"]
             cited = [value for value in item.get("source_chunk_ids", []) if value in batch_ids]
-            label, value = _timeline_label(str(item.get("label", ""))), str(item.get("value", "")).strip()
-            key = (label.casefold(), value.casefold())
-            if label and value and cited and key not in seen_deadlines:
-                seen_deadlines.add(key)
-                report["deadlines"].append({"label": label, "value": value,
-                                            "note": str(item.get("note", "")).strip(),
-                                            "relative_to": _timeline_label(str(item.get("relative_to", ""))),
-                                            "offset_days": item.get("offset_days"),
-                                            "conditional": bool(item.get("conditional", False)),
-                                            "source_chunk_ids": cited})
-    report["deadlines"] = _resolve_deadlines(report["deadlines"])
-    completion = _project_completion_milestone(report["deadlines"])
-    if (not report["project_facts"]["project_deadline"]["detail"] and completion
-            and not completion.get("conditional") and _timeline_date(completion["value"])):
-        report["project_facts"]["project_deadline"] = {
-            "detail": f"{completion['label']}: {completion['value']}",
-            "source_chunk_ids": completion["source_chunk_ids"],
-        }
+            value = str(item.get("value", "")).strip()
+            if not value or not cited:
+                continue
+            # Giữ một mốc cho mỗi loại; ưu tiên mốc có ngày cụ thể.
+            if kind in found and (_timeline_date(found[kind]["value"]) or not _timeline_date(value)):
+                continue
+            relative = str(item.get("relative_to", "")).strip()
+            found[kind] = {"kind": kind, "label": TIMELINE_KINDS[kind], "value": value,
+                           "note": str(item.get("note", "")).strip(),
+                           "relative_to": TIMELINE_KINDS.get(relative, ""),
+                           "offset_days": item.get("offset_days"),
+                           "conditional": bool(item.get("conditional", False)),
+                           "source_chunk_ids": cited}
+    report["deadlines"] = _resolve_deadlines([found[kind] for kind in TIMELINE_KINDS if kind in found])
     document_candidates = []
     chunks_by_id = {chunk.get("id"): chunk for chunk in chunks if chunk.get("id")}
     chunk_positions = {chunk["id"]: position for position, chunk in enumerate(chunks) if chunk.get("id")}
