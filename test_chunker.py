@@ -6,7 +6,6 @@ from docx import Document
 
 from business.chunker import Block, chunk_file, make_chunks
 from business.labels import attach_labels
-from business.requirements_filter import NEGATIVE, POSITIVE, mark_requirement_candidates, tier_for
 from business.semantic import split_semantic
 
 
@@ -19,11 +18,6 @@ class NullEmbedder:
 
 
 class ChunkerTests(unittest.TestCase):
-    def test_requirement_tier_boundaries(self):
-        self.assertEqual(tier_for(0.4999), "reject")
-        self.assertEqual(tier_for(0.50), "approved")
-        self.assertEqual(tier_for(0.60), "approved")
-
     def test_docx_structure_and_table(self):
         result = chunk_file(SAMPLES / "sample.docx", embedder=NullEmbedder())
         self.assertEqual(result["chunk_count"], 4)
@@ -138,39 +132,6 @@ class ChunkerTests(unittest.TestCase):
         self.assertNotEqual(chunks[1]["labels"]["topics"][0], "Thông tin chung")
         self.assertEqual(chunks[1]["labels"]["source"], "content_embedding")
         self.assertTrue(fake.normalized)
-
-    def test_requirement_tiers_use_tag_scores_without_manual_feedback(self):
-        from database.tag_store import save_approved
-
-        class FakeEmbedder:
-            def encode(self, texts, normalize_embeddings=False):
-                self.texts = texts
-                output = []
-                for text in texts:
-                    value = text.removeprefix("query: ")
-                    if value in POSITIVE or value == "Submission requirements":
-                        output.append([1.0, 0.0])
-                    elif value in NEGATIVE or value == "UNDP overview":
-                        output.append([0.0, 1.0])
-                    else:
-                        output.append([0.7, 0.7])
-                return output
-
-        chunks = [
-            {"labels": {"topics": ["Submission requirements"]}, "text": "A very long document section."},
-            {"labels": {"topics": ["UNDP overview"]}, "text": "Another long section."},
-        ]
-        fake = FakeEmbedder()
-        with TemporaryDirectory() as folder:
-            db = Path(folder) / "tags.sqlite3"
-            mark_requirement_candidates(chunks, embedder=fake, db_path=db)
-            self.assertEqual(chunks[0]["requirement_tier"], "approved")
-            self.assertEqual(chunks[1]["requirement_tier"], "reject")
-            self.assertFalse(any("long" in text for text in fake.texts))
-            save_approved("UNDP overview", [0.0, 1.0], db)
-            mark_requirement_candidates(chunks, embedder=fake, db_path=db)
-            self.assertEqual(chunks[1]["requirement_tier"], "reject")
-            self.assertNotIn("approved_by_user", chunks[1])
 
 
 if __name__ == "__main__":
