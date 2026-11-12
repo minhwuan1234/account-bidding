@@ -244,12 +244,11 @@ function renderBidReport(){
    const options=el('div','report-file-options');
    for(const file of library){
     const label=el('label'),input=el('input');input.type='checkbox';input.checked=(item.file_ids||[]).includes(file.id);
-    input.onchange=()=>{delete item.match_result;delete item.match_message;item.file_ids=input.checked?[...new Set([...(item.file_ids||[]),file.id])]:item.file_ids.filter(id=>id!==file.id);rememberReportEdit(item);renderBidReport();const current=[...document.querySelectorAll('.report-check-row')].find(entry=>entry.dataset.reportKey===rowKey);if(current)current.querySelector('.report-item-details').open=true};
+    input.onchange=()=>{delete item.match_result;delete item.match_message;item.file_ids=input.checked?[...new Set([...(item.file_ids||[]),file.id])]:item.file_ids.filter(id=>id!==file.id);rememberReportEdit(item);renderBidReport();void matchSelectedFiles(item);const current=[...document.querySelectorAll('.report-check-row')].find(entry=>entry.dataset.reportKey===rowKey);if(current)current.querySelector('.report-item-details').open=true};
     label.append(input,document.createTextNode(file.filename));options.append(label)
    }
    if(!library.length)options.append(el('p','report-note','Thư viện chưa có file.'));body.append(options);
-   if(selected.length){const matchButton=el('button','secondary','Đối chiếu file đã chọn'),message=el('p','report-note');matchButton.type='button';matchButton.onclick=async()=>{const ids=[...(item.file_ids||[])],bidId=activeBidId,revision=checklistRevision;matchButton.disabled=true;message.textContent='Đang đối chiếu checklist…';try{const response=await fetch('/api/document-match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:item.title,detail:item.detail||'',file_ids:ids})});const result=await response.json();if(!response.ok)throw Error(result.error||'Không đối chiếu được');if(activeBidId!==bidId||revision!==checklistRevision||JSON.stringify(item.file_ids||[])!==JSON.stringify(ids)){message.textContent='Checklist hoặc file đã thay đổi; hãy đối chiếu lại.';return}item.match_result=result;scheduleBidSave();renderBidReport();const current=[...document.querySelectorAll('.report-check-row')].find(entry=>entry.dataset.reportKey===rowKey);if(current)current.querySelector('.report-item-details').open=true}catch(error){message.textContent='Lỗi đối chiếu: '+error.message}finally{matchButton.disabled=false}};body.append(matchButton,message)}
-   if(checks.length){const list=el('ul','report-match-results');for(const check of checks)list.append(rich('li','',`${check.status==='matched'?'✓ Khớp':'× Chưa khớp'}: ${check.requirement}`));body.append(list)}if(match?.incomplete)body.append(el('p','report-note','Một số file liên quan chưa có checklist; cần bổ sung để đối chiếu đầy đủ.'));
+   if(match?.incomplete)body.append(el('p','report-note','Một số file liên quan chưa có checklist; cần bổ sung để đối chiếu đầy đủ.'));
    const source=sourceDetails(item.source_chunk_ids||[]);if(source)body.append(source);
    detail.append(body);row.append(detail);group.append(row)
   }
@@ -277,6 +276,11 @@ async function reportJobResult(){
   if(job.status!=='queued'&&job.status!=='running')throw Error('Trạng thái báo cáo không hợp lệ');
  }
  throw Error('Tạo báo cáo quá 20 phút. Hãy thử lại sau.');
+}
+async function matchSelectedFiles(item){
+ const ids=[...(item.file_ids||[])];if(!ids.length){delete item.match_pending;return;}
+ const report=latestReport,bidId=activeBidId,revision=checklistRevision;item.match_pending=true;renderBidReport();
+ try{const response=await fetch('/api/document-match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:item.title,detail:item.detail||'',file_ids:ids})});const data=await response.json();if(!response.ok)throw Error(data.error||'Không đối chiếu được');if(latestReport!==report||bidId!==activeBidId||revision!==checklistRevision||JSON.stringify(item.file_ids||[])!==JSON.stringify(ids))return;item.match_result=data;delete item.match_message;scheduleBidSave()}catch(error){if(latestReport===report&&JSON.stringify(item.file_ids||[])===JSON.stringify(ids))item.match_message='Chưa đối chiếu được: '+error.message}finally{if(latestReport===report&&JSON.stringify(item.file_ids||[])===JSON.stringify(ids)){delete item.match_pending;renderBidReport()}}
 }
 async function autoMatchReport(report,generation,bidId){
  const queue=(report.requirements||[]).filter(item=>!(item.file_ids||[]).length&&!reportOverrides.has(reportKey(item)));
