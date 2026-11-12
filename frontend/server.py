@@ -234,7 +234,7 @@ class Handler(BaseHTTPRequestHandler):
         payload = json.loads(self.read_body())
         if not isinstance(payload.get("documents"), list) or not isinstance(payload.get("matches", []), list):
             raise ValueError("Thiếu tài liệu hoặc dữ liệu báo cáo")
-        job_id = submit_report_job(payload["documents"], payload.get("matches", []))
+        job_id = submit_report_job(payload["documents"], payload.get("matches", []), force=payload.get("force") is True)
         self.respond_json(202, {"id": job_id})
 
     def post_bid(self, url):

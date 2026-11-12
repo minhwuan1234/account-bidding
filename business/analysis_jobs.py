@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tempfile
+import hashlib
 import threading
 import time
 import uuid
@@ -79,6 +80,8 @@ def _run(job_id: str, filename: str, body: bytes, semantic: bool, threshold: flo
             result = chunk_file(path, semantic=semantic, threshold=threshold,
                                 on_blocks=record_summary, on_progress=record_progress)
             result["stored_document_id"] = document_id
+            result["content_sha256"] = hashlib.sha256(body).hexdigest()
+            result["analysis_options"] = {"semantic": semantic, "threshold": threshold}
         state = {"status": "done", "phase": "Phân tích xong", "result": result}
         print(f"Analysis completed: {filename}; {time.monotonic() - started:.1f}s", flush=True)
     except Exception as exc:

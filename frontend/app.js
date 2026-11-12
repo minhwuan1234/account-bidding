@@ -257,8 +257,8 @@ function renderBidReport(){
 
  reportPrint.hidden=false;reportRun.disabled=false;reportToolbar.hidden=false
 }
-async function reportJobResult(){
- const startedResponse=await fetch('/api/bid-report-job',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({documents:latest,matches:[]})});
+async function reportJobResult(force=false){
+ const startedResponse=await fetch('/api/bid-report-job',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({documents:latest,matches:[],force})});
  const started=await startedResponse.json();
  if(!startedResponse.ok)throw Error(started.error||'Không khởi tạo được báo cáo');
  appendProcessingLog('queued','Đã gửi tài liệu tới máy chủ để tạo báo cáo');
@@ -288,13 +288,13 @@ async function autoMatchReport(report,generation,bidId){
  async function worker(){while(next<queue.length){const item=queue[next++];item.match_pending=true;if(latestReport===report)renderBidReport();try{const response=await fetch('/api/document-match-auto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:item.title,detail:item.detail||''})});const data=await response.json();if(!response.ok)throw Error(data.error||'Không đối chiếu được');if(latestReport!==report||generation!==reportGeneration||bidId!==activeBidId||revision!==checklistRevision||reportOverrides.has(reportKey(item)))continue;item.file_ids=data.file_ids||[];item.match_result=data.result||null;item.match_message=data.message||'';scheduleBidSave()}catch(error){if(latestReport===report&&generation===reportGeneration)item.match_message='Chưa đối chiếu được: '+error.message}finally{delete item.match_pending;if(latestReport===report&&generation===reportGeneration)renderBidReport()}}}
  await Promise.all(Array.from({length:Math.min(3,queue.length)},worker));
 }
-async function generateBidReport(){
+async function generateBidReport(force=false){
  if(!latest.some(doc=>doc.chunks.length)||!llmReady)return;
  const runId=ensureRun('Tạo lại bản tổng hợp'),generation=++reportGeneration;
  reportRun.disabled=true;reportToolbar.hidden=true;reportStatus.className='meta';reportStatus.textContent='';
  showProcessingFiles(undefined,'Đang tạo bản tổng hợp');compareBox.hidden=true;
  try{
-  const data=await reportJobResult();
+  const data=await reportJobResult(force);
   if(generation!==reportGeneration)return;
   for(const usage of data.usage_events||[data.usage])addRunUsage(usage,runId);
   if(data.usage_missing&&activeRun?.id===runId)activeRun.unknownCost=true;
@@ -312,7 +312,7 @@ async function generateBidReport(){
   if(activeRun?.id===runId){activeRun.unknownCost=true;finishRun('Lỗi tạo bản tổng hợp')}
  }finally{if(generation===reportGeneration)reportRun.disabled=false}
 }
-reportRun.onclick=generateBidReport;reportPrint.onclick=()=>window.print();
+reportRun.onclick=()=>generateBidReport(true);reportPrint.onclick=()=>window.print();
 window.addEventListener('beforeprint',()=>{const evaluation=document.querySelector('.report-evaluation-other');if(evaluation&&!evaluation.open){evaluation.open=true;evaluation.dataset.printOpened='true'}});
 window.addEventListener('afterprint',()=>{const evaluation=document.querySelector('.report-evaluation-other[data-print-opened]');if(evaluation){evaluation.open=false;delete evaluation.dataset.printOpened}});
 compareRetry.onclick=null;
