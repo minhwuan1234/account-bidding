@@ -13,6 +13,8 @@ from business.analysis_jobs import get as get_analysis_job, submit as submit_ana
 from business.bid_history import create_bid, delete_bid, get_bid, list_bids, update_bid
 from business.bid_report import generate_report
 from business.document_matching import compare_requirement
+from business.checklist_jobs import get as get_checklist_job, submit as submit_checklist_job
+from database.library_checklists import checklist_revision, get_checklist, save_checklist
 from business.chunker import chunk_file
 from business.library_service import add_document, delete_document, list_documents, update_document_description
 from business.llm_tag_match import MODEL, has_api_key, match_one_tag
@@ -54,6 +56,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         url = urlparse(self.path)
+        if url.path == "/api/library-checklist-job":
+            job = get_checklist_job(parse_qs(url.query).get("id", [""])[0])
+            self.respond_json(200, job) if job else self.respond_json(404, {"error": "Phiên tạo checklist không còn; hãy thử lại"})
+            return
+        if url.path == "/api/library-checklist":
+            file_id = parse_qs(url.query).get("id", [""])[0]
+            if not file_id:
+                self.respond_json(400, {"error": "Thiếu ID tài liệu"})
+                return
+            try:
+                items = get_checklist(file_id)
+                self.respond_json(200, {"items": items, "revision": checklist_revision(items)})
+            except Exception as exc:
+                self.respond_json(503, {"error": str(exc)})
+            return
         if url.path == "/api/bids":
             try:
                 bid_id = parse_qs(url.query).get("id", [""])[0]
@@ -112,6 +129,8 @@ class Handler(BaseHTTPRequestHandler):
             "/api/chunk": self.post_chunk,
             "/api/library": self.post_library,
             "/api/library-description": self.post_library_description,
+            "/api/library-checklist": self.post_library_checklist,
+            "/api/library-checklist-generate": self.post_library_checklist_generate,
             "/api/llm-match-tag": self.post_match_tag,
             "/api/document-match": self.post_document_match,
             "/api/bid-report": self.post_bid_report,
@@ -177,6 +196,16 @@ class Handler(BaseHTTPRequestHandler):
     def post_document_match(self, url):
         payload = json.loads(self.read_body(65536))
         self.respond_json(200, compare_requirement(payload.get("title"), payload.get("detail"), payload.get("file_ids")))
+
+    def post_library_checklist(self, url):
+        payload = json.loads(self.read_body(1024 * 1024))
+        if not save_checklist(str(payload.get("id", "")), payload.get("items")):
+            raise ValueError("Không tìm thấy file trong thư viện")
+        self.respond_json(200, {"ok": True})
+
+    def post_library_checklist_generate(self, url):
+        payload = json.loads(self.read_body(8192))
+        self.respond_json(202, {"id": submit_checklist_job(str(payload.get("id", "")))})
 
     def post_match_tag(self, url):
         payload = json.loads(self.read_body())

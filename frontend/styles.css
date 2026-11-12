@@ -48,3 +48,5 @@
 .report-key-point,.report-product-name{color:#101820;font-weight:800}.report-table th.report-product-name{background:transparent;text-align:left}
 
 .report-evaluation-rules .report-rich-content{min-width:0;overflow-wrap:anywhere}
+
+.library-checklist{padding:10px 0}.checklist-editor{display:grid;gap:10px}.checklist-edit-row{display:grid;grid-template-columns:1fr 1.3fr 1.6fr auto;gap:8px;align-items:start}.checklist-edit-row textarea{width:100%;min-height:42px;margin:0;resize:vertical}.checklist-edit-row button{font-size:12px}.library-checklist>button{margin:8px 8px 0 0}@media(max-width:760px){.checklist-edit-row{grid-template-columns:1fr}.checklist-edit-row button{justify-self:start}}

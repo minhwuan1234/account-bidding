@@ -88,9 +88,9 @@ Không cần duyệt thủ công. Dữ liệu duyệt tag cũ trong SQLite đư�
 
 ## Thư viện file và gợi ý theo tag
 
-Trong **Thư viện file**, có thể chọn nhiều PDF/DOCX trong một lần và bấm **Lưu file**; ứng dụng lưu từng file riêng cùng **tóm tắt Markdown** trích từ tiêu đề, câu và hàng bảng đại diện. Đây là bản tóm tắt trích lọc, không phải bản do LLM viết; có thể sửa trong mục **Tóm tắt nội dung tài liệu**. File và tóm tắt vẫn có ở lần mở ứng dụng sau. Trên Railway chúng nằm trong MySQL, còn bản local mặc định dùng SQLite. Bản ZIP không chứa database cá nhân.
+Trong **Thư viện file**, tải PDF/DOCX và bấm **Lưu file**. Mỗi file mới được lưu trước, sau đó app tạo checklist bằng OpenAI API từ nội dung trích xuất; mỗi mục gồm thông tin, giá trị và nguồn. Người dùng có thể thêm, sửa, xóa và lưu checklist của mọi file. File đã có từ trước cần mở phần checklist và bấm **Tạo checklist từ file** hoặc nhập thủ công; bản tóm tắt cũ vẫn được giữ trong database. Nếu không trích được chữ hoặc tạo checklist lỗi, file vẫn được lưu và người dùng có thể thử lại hoặc nhập thủ công. PDF scan cần OCR trước khi tạo tự động. Checklist và file dùng MySQL trên Railway hoặc SQLite local.
 
-Sau khi có tag và file trong thư viện, ứng dụng **tự đối chiếu file theo tag**. Ứng dụng gửi text của từng tag (tối đa 30.000 ký tự cho mỗi tag) và **một mô tả Markdown cho mỗi file** trong thư viện tới OpenAI API. Kết quả đối chiếu được dùng nội bộ khi tạo báo cáo; danh sách gợi ý theo từng tag không hiển thị trên giao diện. Người dùng có thể chỉnh file liên quan trực tiếp trong từng mục **Tài liệu cần nộp** của báo cáo và tải thêm PDF/DOCX trong tab thư viện.
+Trong **Tài liệu cần nộp**, chọn tối đa 10 file có checklist rồi bấm **Đối chiếu file đã chọn**. Model so các điều kiện với checklist đã lưu, không đọc lại toàn bộ file gốc. Kết quả dựa trên thông tin có thể do người dùng chỉnh sửa; cần kiểm tra nguồn trước khi nộp. Chỉnh checklist sẽ làm kết quả đối chiếu cũ hết hiệu lực khi mở lại bid. App chưa tự lọc file theo loại hoặc tự chọn file.
 
 Phần **Tài liệu cần nộp** quét cả các đoạn `reject` để không bỏ sót giấy tờ do bước phân loại tag. Danh sách hiển thị thành hai cột cố định; người dùng mở từng mục để xem nguồn và tự chọn file liên quan.
 

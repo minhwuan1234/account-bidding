@@ -93,5 +93,7 @@ def delete_file(file_id: str, path: Path | None = None) -> bool:
         from database.mysql_documents import delete_document
         return delete_document("library", file_id)
     with _connect(path) as connection:
+        connection.execute("CREATE TABLE IF NOT EXISTS library_checklists (file_id TEXT PRIMARY KEY, items_json TEXT NOT NULL)")
+        connection.execute("DELETE FROM library_checklists WHERE file_id = ?", (file_id,))
         cursor = connection.execute("DELETE FROM library_files WHERE id = ?", (file_id,))
     return cursor.rowcount > 0
