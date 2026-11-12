@@ -41,7 +41,7 @@ def submit(filename: str, body: bytes, semantic: bool, threshold: float) -> str:
     with _lock:
         _jobs[job_id].update(phase="Đang chờ lượt phân tích", updated=time.monotonic())
     try:
-        _executor.submit(_run, job_id, filename, body, semantic, threshold, stored["id"])
+        _executor.submit(_run, job_id, filename, body, semantic, threshold, stored["id"], stored.get("reused", False))
     except Exception:
         with _lock:
             del _jobs[job_id]
@@ -83,7 +83,7 @@ def _rename_cached_result(result: dict, filename: str) -> dict:
     return result
 
 
-def _run(job_id: str, filename: str, body: bytes, semantic: bool, threshold: float, document_id: str) -> None:
+def _run(job_id: str, filename: str, body: bytes, semantic: bool, threshold: float, document_id: str, reused: bool = False) -> None:
     with _lock:
         _jobs[job_id].update(status="running", phase="Bắt đầu phân tích", updated=time.monotonic())
     started = time.monotonic()
@@ -100,7 +100,7 @@ def _run(job_id: str, filename: str, body: bytes, semantic: bool, threshold: flo
             result = _rename_cached_result(cached["result"], filename)
             result["stored_document_id"] = document_id
             summary = cached.get("summary", "")
-            if summary:
+            if summary and not reused:
                 summary = "# " + filename + "\n" + summary.partition("\n")[2]
                 update_input_summary(document_id, summary)
             with _lock:
@@ -112,7 +112,8 @@ def _run(job_id: str, filename: str, body: bytes, semantic: bool, threshold: flo
             summary = ""
             def record_summary(blocks):
                 nonlocal summary_saved, summary
-                summary = summarize_rfp(document_id, path, blocks)
+                if not reused:
+                    summary = summarize_rfp(document_id, path, blocks)
                 summary_saved = True
 
             def record_progress(phase):
@@ -134,7 +135,7 @@ def _run(job_id: str, filename: str, body: bytes, semantic: bool, threshold: flo
         state = {"status": "done", "phase": "Phân tích xong", "result": result}
         print(f"Analysis completed: {filename}; {time.monotonic() - started:.1f}s", flush=True)
     except Exception as exc:
-        if not summary_saved:
+        if not summary_saved and not reused:
             try:
                 mark_summary_unavailable(document_id, filename)
             except Exception:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import hashlib
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -43,6 +44,14 @@ def _ensure_schema(connection) -> None:
                         ON DELETE CASCADE
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS rfp_document_hashes (
+                    digest CHAR(64) PRIMARY KEY,
+                    document_id CHAR(32) NULL,
+                    CONSTRAINT fk_rfp_hash_document FOREIGN KEY (document_id)
+                        REFERENCES uploaded_documents(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """)
         connection.commit()
         _schema_ready = True
 
@@ -56,6 +65,26 @@ def save_document(kind: str, filename: str, content: bytes, summary_md: str) -> 
         _ensure_schema(connection)
         try:
             with connection.cursor() as cursor:
+                if kind == "rfp":
+                    digest = hashlib.sha256(content).hexdigest()
+                    cursor.execute("INSERT IGNORE INTO rfp_document_hashes (digest, document_id) VALUES (%s, NULL)", (digest,))
+                    cursor.execute("SELECT document_id FROM rfp_document_hashes WHERE digest=%s FOR UPDATE", (digest,))
+                    existing_id = cursor.fetchone()[0]
+                    if not existing_id:
+                        cursor.execute("SELECT id FROM uploaded_documents WHERE kind=%s AND size_bytes=%s ORDER BY added_at,id", (kind, len(content)))
+                        candidates = [row[0] for row in cursor.fetchall()]
+                        for candidate in candidates:
+                            cursor.execute("SELECT content FROM uploaded_document_parts WHERE document_id=%s ORDER BY part_number", (candidate,))
+                            if b"".join(part[0] for part in cursor.fetchall()) == content:
+                                existing_id = candidate
+                                cursor.execute("UPDATE rfp_document_hashes SET document_id=%s WHERE digest=%s", (candidate, digest))
+                                break
+                    if existing_id:
+                        cursor.execute("SELECT id, filename, summary_md, size_bytes, added_at FROM uploaded_documents WHERE id=%s AND kind=%s", (existing_id, kind))
+                        row = cursor.fetchone()
+                        if row:
+                            connection.commit()
+                            return {**dict(zip(("id", "filename", "description_md", "size_bytes", "added_at"), row)), "reused": True}
                 cursor.execute(
                     "INSERT INTO uploaded_documents (id, kind, filename, summary_md, size_bytes, added_at) "
                     "VALUES (%s, %s, %s, %s, %s, %s)",
@@ -66,12 +95,14 @@ def save_document(kind: str, filename: str, content: bytes, summary_md: str) -> 
                         "INSERT INTO uploaded_document_parts (document_id, part_number, content) VALUES (%s, %s, %s)",
                         (document_id, part_number, content[offset:offset + PART_SIZE]),
                     )
+                if kind == "rfp":
+                    cursor.execute("UPDATE rfp_document_hashes SET document_id=%s WHERE digest=%s", (document_id, digest))
             connection.commit()
         except Exception:
             connection.rollback()
             raise
     return {"id": document_id, "filename": filename, "description_md": summary_md,
-            "size_bytes": len(content), "added_at": added_at}
+            "size_bytes": len(content), "added_at": added_at, "reused": False}
 
 
 def list_documents(kind: str) -> list[dict]:
