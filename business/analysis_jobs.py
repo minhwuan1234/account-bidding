@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import tempfile
 import hashlib
+import json
+import os
 import threading
 import time
 import uuid
@@ -12,6 +14,8 @@ from pathlib import Path
 
 from business.chunker import chunk_file
 from business.upload_service import mark_summary_unavailable, receive_rfp, summarize_rfp
+from database.input_store import update_input_summary
+from database.report_cache import get_report, save_report
 
 
 _executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="document-analysis")
@@ -57,6 +61,28 @@ def get(job_id: str) -> dict | None:
         return snapshot
 
 
+def _analysis_cache_key(body: bytes, filename: str, semantic: bool, threshold: float) -> str:
+    root = Path(__file__).resolve().parent
+    version = hashlib.sha256()
+    for name in ("chunker.py", "semantic.py", "labels.py", "description.py"):
+        version.update((root / name).read_bytes())
+    material = {"kind": "file-analysis-v1", "content": hashlib.sha256(body).hexdigest(),
+                "extension": Path(filename).suffix.lower(), "semantic": semantic, "threshold": threshold,
+                "version": version.hexdigest(), "embedding_model": os.environ.get("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")}
+    return hashlib.sha256(json.dumps(material, sort_keys=True).encode()).hexdigest()
+
+
+def _rename_cached_result(result: dict, filename: str) -> dict:
+    old_name = result.get("file", filename)
+    old_prefix, new_prefix = Path(old_name).stem + "-", Path(filename).stem + "-"
+    result["file"] = filename
+    for chunk in result.get("chunks", []):
+        chunk["file"] = filename
+        if chunk.get("id", "").startswith(old_prefix):
+            chunk["id"] = new_prefix + chunk["id"][len(old_prefix):]
+    return result
+
+
 def _run(job_id: str, filename: str, body: bytes, semantic: bool, threshold: float, document_id: str) -> None:
     with _lock:
         _jobs[job_id].update(status="running", phase="Bắt đầu phân tích", updated=time.monotonic())
@@ -64,12 +90,29 @@ def _run(job_id: str, filename: str, body: bytes, semantic: bool, threshold: flo
     print(f"Analysis started: {filename}", flush=True)
     summary_saved = False
     try:
+        cache_key = _analysis_cache_key(body, filename, semantic, threshold)
+        try:
+            cached = get_report(cache_key)
+        except Exception as exc:
+            print(f"Analysis cache read failed: {type(exc).__name__}: {exc}", flush=True)
+            cached = None
+        if cached:
+            result = _rename_cached_result(cached["result"], filename)
+            result["stored_document_id"] = document_id
+            summary = cached.get("summary", "")
+            if summary:
+                summary = "# " + filename + "\n" + summary.partition("\n")[2]
+                update_input_summary(document_id, summary)
+            with _lock:
+                _jobs[job_id].update(status="done", phase="Đã dùng dữ liệu file đã phân tích", result=result, updated=time.monotonic())
+            return
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / filename
             path.write_bytes(body)
+            summary = ""
             def record_summary(blocks):
-                nonlocal summary_saved
-                summarize_rfp(document_id, path, blocks)
+                nonlocal summary_saved, summary
+                summary = summarize_rfp(document_id, path, blocks)
                 summary_saved = True
 
             def record_progress(phase):
@@ -82,6 +125,12 @@ def _run(job_id: str, filename: str, body: bytes, semantic: bool, threshold: flo
             result["stored_document_id"] = document_id
             result["content_sha256"] = hashlib.sha256(body).hexdigest()
             result["analysis_options"] = {"semantic": semantic, "threshold": threshold}
+            try:
+                cached_result = {**result}
+                cached_result.pop("stored_document_id", None)
+                save_report(cache_key, {"result": cached_result, "summary": summary})
+            except Exception as exc:
+                print(f"Analysis cache save failed: {type(exc).__name__}: {exc}", flush=True)
         state = {"status": "done", "phase": "Phân tích xong", "result": result}
         print(f"Analysis completed: {filename}; {time.monotonic() - started:.1f}s", flush=True)
     except Exception as exc:
