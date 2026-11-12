@@ -354,7 +354,9 @@ def build_evaluation_request(source_chunks: list[dict[str, Any]]) -> dict[str, A
             "gộp thông tin cùng chủ đề, bỏ lặp và chi tiết thủ tục phụ; không bỏ điều kiện quyết định kết quả "
             "hoặc lặp lại scoring. "
             "Với kind='eligibility', mỗi điều kiện một ý ngắn. criteria chỉ chứa tiêu chí kỹ thuật hoặc tài chính "
-            "được nêu cụ thể; weight phải chép đúng tỷ trọng hoặc điểm số trong nguồn, nếu không nêu thì để trống. "
+            "được nêu cụ thể; phải trích đầy đủ từng hàng tiêu chí có điểm trong mọi bảng, giữ nguyên tên và số điểm "
+            "theo đúng từng hàng; không chỉ tóm tắt điểm tổng. weight chép đúng số điểm hoặc tỷ trọng trong nguồn, "
+            "nếu không nêu thì để trống. "
             "Trong detail của mỗi rule và tiêu chí, đánh dấu cụm thông tin chính ngắn bằng **chữ đậm**. "
             "Không thêm dấu markdown vào name, weight hoặc evidence_quote. "
             "Mỗi mục phải có evidence_quote là đoạn ngắn NGUYÊN VĂN trong một source_chunk_ids được trích. "
@@ -374,6 +376,31 @@ def _quote_in_batch(quote: str, cited: list[str], batch: list[dict[str, Any]]) -
         segment.get("id") in cited and needle in re.sub(r"\s+", "", segment.get("text", "")).casefold()
         for segment in batch
     )
+
+
+def _table_scoring_criteria(batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Preserve explicit scores from recognizable evaluation table rows."""
+    results = []
+    for part in batch:
+        lines = str(part.get("text", "")).splitlines()
+        header = None
+        for line in lines:
+            if "|" not in line:
+                continue
+            cells = [cell.strip() for cell in line.split("|")]
+            lowered = [cell.casefold() for cell in cells]
+            score_columns = [i for i, cell in enumerate(lowered) if re.search(r"maximum points|(?:max(?:imum)?\s+)?scores?|points?|weight|tỷ trọng|điểm", cell)]
+            name_columns = [i for i, cell in enumerate(lowered) if re.search(r"criteri|evaluation|tiêu chí", cell)]
+            if score_columns and name_columns and score_columns[-1] != name_columns[0]:
+                header = (name_columns[0], score_columns[-1])
+                continue
+            if header is None or max(header) >= len(cells):
+                continue
+            name, weight = cells[header[0]], cells[header[1]]
+            if not name or not re.fullmatch(r"\d+(?:[.,]\d+)?\s*%?", weight):
+                continue
+            results.append({"name": name, "weight": weight, "detail": "", "source_chunk_ids": [part.get("id", "")]})
+    return results
 
 
 def _merge_evaluation_results(responses: list[dict[str, Any]], batches: list[list[dict[str, Any]]]) -> dict[str, Any]:
@@ -404,13 +431,24 @@ def _merge_evaluation_results(responses: list[dict[str, Any]], batches: list[lis
             weight = str(raw.get("weight", "")).strip()
             if weight and not any(_literal_in_sources(weight, cited, {part.get("id"): part.get("text", "")})
                                   for part in batch):
-                weight = ""
+                number = re.fullmatch(r"\s*(\d+(?:[.,]\d+)?)\s*(?:điểm|points?)\s*", weight, re.I)
+                if number and any(_literal_in_sources(number.group(1), cited, {part.get("id"): part.get("text", "")}) for part in batch):
+                    weight = number.group(1)
+                else:
+                    weight = ""
             key = (name.casefold(), weight.casefold())
             if key in criteria:
                 criteria[key]["source_chunk_ids"] = list(dict.fromkeys(criteria[key]["source_chunk_ids"] + cited))
             else:
                 criteria[key] = {"name": name, "weight": weight, "detail": str(raw.get("detail", "")).strip(),
                                  "source_chunk_ids": cited}
+    for batch in batches:
+        for item in _table_scoring_criteria(batch):
+            key = (item["name"].casefold(), item["weight"].casefold())
+            if key not in criteria:
+                criteria[key] = item
+            else:
+                criteria[key]["source_chunk_ids"] = list(dict.fromkeys(criteria[key]["source_chunk_ids"] + item["source_chunk_ids"]))
     all_ids = list(dict.fromkeys(source for item in [*rules.values(), *criteria.values()]
                              for source in item["source_chunk_ids"]))
     ordered = sorted(rules.values(), key=lambda item: {"eligibility": 0, "scoring": 1, "evaluation": 2}[item["kind"]])
