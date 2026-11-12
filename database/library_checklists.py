@@ -5,7 +5,7 @@ import json
 import hashlib
 
 from database.backend import use_mysql
-from database.library_store import _connect, get_file
+from database.library_store import _connect
 from database.mysql_connection import connect as mysql_connect
 
 
@@ -53,25 +53,36 @@ def save_checklist(file_id, items, path=None, *, create_only=False):
         if not entry['label'] or any(len(value) > 4000 for value in entry.values()):
             raise ValueError("Mỗi mục cần tên và tối đa 4000 ký tự mỗi trường")
         clean.append(entry)
-    if get_file(file_id, path) is None:
-        return False
     value = json.dumps(clean, ensure_ascii=False)
     if path is None and use_mysql():
         from database.mysql_documents import _ensure_schema
         with mysql_connect() as connection:
             _ensure_schema(connection)
             _mysql_schema(connection)
-            with connection.cursor() as cursor:
-                if create_only:
-                    cursor.execute("INSERT IGNORE INTO library_checklists (file_id,items_json) VALUES (%s,%s)", (file_id, value))
-                    if not cursor.rowcount:
-                        raise ValueError("Checklist đã tồn tại; không ghi đè")
-                else:
-                    cursor.execute("INSERT INTO library_checklists (file_id,items_json) VALUES (%s,%s) ON DUPLICATE KEY UPDATE items_json=VALUES(items_json)", (file_id, value))
-            connection.commit()
+            try:
+                with connection.cursor() as cursor:
+                    # Lock the parent row to serialize creation, editing and deletion.
+                    cursor.execute("SELECT id FROM uploaded_documents WHERE id=%s AND kind=%s FOR UPDATE", (file_id, "library"))
+                    if cursor.fetchone() is None:
+                        return False
+                    if create_only:
+                        cursor.execute("SELECT file_id FROM library_checklists WHERE file_id=%s", (file_id,))
+                        if cursor.fetchone() is not None:
+                            raise ValueError("Checklist đã tồn tại; không ghi đè")
+                        cursor.execute("INSERT INTO library_checklists (file_id,items_json) VALUES (%s,%s)", (file_id, value))
+                    else:
+                        cursor.execute("INSERT INTO library_checklists (file_id,items_json) VALUES (%s,%s) ON DUPLICATE KEY UPDATE items_json=VALUES(items_json)", (file_id, value))
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
     else:
         with _connect(path) as connection:
             _sqlite_schema(connection)
+            # Acquire the writer lock before verifying the parent file.
+            connection.execute("BEGIN IMMEDIATE")
+            if connection.execute("SELECT 1 FROM library_files WHERE id=?", (file_id,)).fetchone() is None:
+                return False
             if create_only:
                 cursor = connection.execute("INSERT OR IGNORE INTO library_checklists (file_id,items_json) VALUES (?,?)", (file_id, value))
                 if not cursor.rowcount:

@@ -199,9 +199,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def post_library_checklist(self, url):
         payload = json.loads(self.read_body(1024 * 1024))
-        if not save_checklist(str(payload.get("id", "")), payload.get("items")):
+        file_id = str(payload.get("id", ""))
+        if not save_checklist(file_id, payload.get("items")):
             raise ValueError("Không tìm thấy file trong thư viện")
-        self.respond_json(200, {"ok": True})
+        items = get_checklist(file_id)
+        if items is None:
+            raise RuntimeError("Chưa đọc lại được checklist sau khi lưu; hãy thử lại")
+        expected = [{key: str(item.get(key, "")).strip() for key in ("label", "value", "source")}
+                    for item in payload["items"]]
+        if items != expected:
+            raise RuntimeError("Checklist đã thay đổi trong lúc lưu; hãy tải lại và kiểm tra")
+        self.respond_json(200, {"ok": True, "items": items, "revision": checklist_revision(items)})
 
     def post_library_checklist_generate(self, url):
         payload = json.loads(self.read_body(8192))
