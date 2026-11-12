@@ -237,19 +237,19 @@ function renderBidReport(){
    const row=el('article','report-check-row'),head=el('div','report-check-row-head'),rowKey=reportKey(item);row.dataset.reportKey=rowKey;
    head.append(el('h4','',item.title));
    const selected=library.filter(file=>(item.file_ids||[]).includes(file.id));
-   const match=item.match_result,checks=match?.items||[],matched=checks.filter(check=>check.status==='matched').length,complete=checks.length>0&&matched===checks.length&&!match?.incomplete;const badge=!selected.length?'Thiếu':!checks.length?'Chưa đối chiếu':complete?'Đủ theo checklist':`${matched}/${checks.length}`;head.append(el('span','report-status-tag '+(complete?'has-file':'missing-file'),badge));row.append(head);if(item.detail){const requirements=el('div','report-requirements');requirements.append(el('strong','','Yêu cầu:'));const list=el('ul');for(const line of item.detail.split(/\n+/).map(value=>value.replace(/^\s*(?:[-•]\s*|\*(?!\*)\s+)/, '').trim()).filter(Boolean))list.append(rich('li','',line));requirements.append(list);row.append(requirements)}
+   const match=item.match_result,checks=match?.items||[],matched=checks.filter(check=>check.status==='matched').length,complete=checks.length>0&&matched===checks.length&&!match?.incomplete;const badge=item.match_pending?'Đang đối chiếu':!selected.length?'Chưa tìm thấy file':!checks.length?'Chưa đối chiếu':complete?'Đáp ứng':`${matched}/${checks.length}`;head.append(el('span','report-status-tag '+(complete?'has-file':'missing-file'),badge));row.append(head);if(item.match_message)row.append(el('p','report-note',item.match_message));if(item.detail){const requirements=el('div','report-requirements');requirements.append(el('strong','','Yêu cầu:'));const list=el('ul');for(const line of item.detail.split(/\n+/).map(value=>value.replace(/^\s*(?:[-•]\s*|\*(?!\*)\s+)/, '').trim()).filter(Boolean))list.append(rich('li','',line));requirements.append(list);row.append(requirements)}
    if(selected.length)row.append(el('div','report-file-summary','File đã chọn: '+selected.slice(0,2).map(file=>file.filename).join(' · ')+(selected.length>2?` · +${selected.length-2} file`:'')));
    const detail=el('details','report-item-details');detail.append(el('summary','','Chọn file liên quan'));
    const body=el('div','report-item-body');
    const options=el('div','report-file-options');
    for(const file of library){
     const label=el('label'),input=el('input');input.type='checkbox';input.checked=(item.file_ids||[]).includes(file.id);
-    input.onchange=()=>{delete item.match_result;item.file_ids=input.checked?[...new Set([...(item.file_ids||[]),file.id])]:item.file_ids.filter(id=>id!==file.id);rememberReportEdit(item);renderBidReport();const current=[...document.querySelectorAll('.report-check-row')].find(entry=>entry.dataset.reportKey===rowKey);if(current)current.querySelector('.report-item-details').open=true};
+    input.onchange=()=>{delete item.match_result;delete item.match_message;item.file_ids=input.checked?[...new Set([...(item.file_ids||[]),file.id])]:item.file_ids.filter(id=>id!==file.id);rememberReportEdit(item);renderBidReport();const current=[...document.querySelectorAll('.report-check-row')].find(entry=>entry.dataset.reportKey===rowKey);if(current)current.querySelector('.report-item-details').open=true};
     label.append(input,document.createTextNode(file.filename));options.append(label)
    }
    if(!library.length)options.append(el('p','report-note','Thư viện chưa có file.'));body.append(options);
    if(selected.length){const matchButton=el('button','secondary','Đối chiếu file đã chọn'),message=el('p','report-note');matchButton.type='button';matchButton.onclick=async()=>{const ids=[...(item.file_ids||[])],bidId=activeBidId,revision=checklistRevision;matchButton.disabled=true;message.textContent='Đang đối chiếu checklist…';try{const response=await fetch('/api/document-match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:item.title,detail:item.detail||'',file_ids:ids})});const result=await response.json();if(!response.ok)throw Error(result.error||'Không đối chiếu được');if(activeBidId!==bidId||revision!==checklistRevision||JSON.stringify(item.file_ids||[])!==JSON.stringify(ids)){message.textContent='Checklist hoặc file đã thay đổi; hãy đối chiếu lại.';return}item.match_result=result;scheduleBidSave();renderBidReport();const current=[...document.querySelectorAll('.report-check-row')].find(entry=>entry.dataset.reportKey===rowKey);if(current)current.querySelector('.report-item-details').open=true}catch(error){message.textContent='Lỗi đối chiếu: '+error.message}finally{matchButton.disabled=false}};body.append(matchButton,message)}
-   if(checks.length){body.append(el('p','report-note','Kết quả dựa trên checklist có thể được người dùng chỉnh sửa. Kiểm tra nguồn trước khi nộp.'));const list=el('ul','report-match-results');for(const check of checks){const li=rich('li','',`${check.status==='matched'?'✓ Có trong checklist':'• Chưa xác nhận'}: ${check.requirement}`);if(check.status==='matched')li.append(el('div','report-note',`${check.filename}: ${check.evidence_quote}${check.source?' · '+check.source:''}`));else if(check.explanation)li.append(el('div','report-note',check.explanation));list.append(li)}body.append(list)}if(match?.incomplete)body.append(el('p','report-note','Một số file chưa được đọc đầy đủ hoặc không trích được chữ; cần kiểm tra thêm.'));
+   if(checks.length){body.append(el('p','report-note','Kết quả dựa trên checklist có thể được người dùng chỉnh sửa. Kiểm tra nguồn trước khi nộp.'));const list=el('ul','report-match-results');for(const check of checks){const li=rich('li','',`${check.status==='matched'?'✓ Có trong checklist':'• Chưa xác nhận'}: ${check.requirement}`);if(check.status==='matched')li.append(el('div','report-note',`${check.filename}: ${check.evidence_quote}${check.source?' · '+check.source:''}`));else if(check.explanation)li.append(el('div','report-note',check.explanation));list.append(li)}body.append(list)}if(match?.incomplete)body.append(el('p','report-note','Một số file liên quan chưa có checklist; cần bổ sung để đối chiếu đầy đủ.'));
    const source=sourceDetails(item.source_chunk_ids||[]);if(source)body.append(source);
    detail.append(body);row.append(detail);group.append(row)
   }
@@ -278,6 +278,12 @@ async function reportJobResult(){
  }
  throw Error('Tạo báo cáo quá 20 phút. Hãy thử lại sau.');
 }
+async function autoMatchReport(report,generation,bidId){
+ const queue=(report.requirements||[]).filter(item=>!(item.file_ids||[]).length&&!reportOverrides.has(reportKey(item)));
+ const revision=checklistRevision;let next=0;
+ async function worker(){while(next<queue.length){const item=queue[next++];item.match_pending=true;if(latestReport===report)renderBidReport();try{const response=await fetch('/api/document-match-auto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:item.title,detail:item.detail||''})});const data=await response.json();if(!response.ok)throw Error(data.error||'Không đối chiếu được');if(latestReport!==report||generation!==reportGeneration||bidId!==activeBidId||revision!==checklistRevision||reportOverrides.has(reportKey(item)))continue;item.file_ids=data.file_ids||[];item.match_result=data.result||null;item.match_message=data.message||'';scheduleBidSave()}catch(error){if(latestReport===report&&generation===reportGeneration)item.match_message='Chưa đối chiếu được: '+error.message}finally{delete item.match_pending;if(latestReport===report&&generation===reportGeneration)renderBidReport()}}}
+ await Promise.all(Array.from({length:Math.min(3,queue.length)},worker));
+}
 async function generateBidReport(){
  if(!latest.some(doc=>doc.chunks.length)||!llmReady)return;
  const runId=ensureRun('Tạo lại bản tổng hợp'),generation=++reportGeneration;
@@ -293,6 +299,7 @@ async function generateBidReport(){
   try{await saveBidSnapshot('complete');appendProcessingLog('done','Đã lưu bản tổng hợp vào lịch sử')}
   catch(saveError){reportStatus.className='error';reportStatus.textContent='Bản tổng hợp đã tạo nhưng chưa lưu được vào lịch sử: '+saveError.message;appendProcessingLog('error',reportStatus.textContent)}
   if(activeRun?.id===runId)finishRun('Hoàn tất');
+  void autoMatchReport(data,generation,activeBidId);
  }catch(error){
   if(generation!==reportGeneration)return;
   reportStatus.className='error';reportStatus.textContent='Lỗi tạo bản tổng hợp: '+error.message;

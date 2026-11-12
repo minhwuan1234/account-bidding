@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, urlparse
 from business.analysis_jobs import get as get_analysis_job, submit as submit_analysis_job
 from business.bid_history import create_bid, delete_bid, get_bid, list_bids, update_bid
 from business.bid_report import generate_report
-from business.document_matching import compare_requirement
+from business.document_matching import auto_compare_requirement, compare_requirement
 from business.checklist_jobs import get as get_checklist_job, submit as submit_checklist_job
 from database.library_checklists import checklist_revision, get_checklist, save_checklist
 from business.chunker import chunk_file
@@ -133,6 +133,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/library-checklist-generate": self.post_library_checklist_generate,
             "/api/llm-match-tag": self.post_match_tag,
             "/api/document-match": self.post_document_match,
+            "/api/document-match-auto": self.post_document_match_auto,
             "/api/bid-report": self.post_bid_report,
             "/api/bid-report-job": self.post_bid_report_job,
             "/api/bids": self.post_bid,
@@ -192,6 +193,10 @@ class Handler(BaseHTTPRequestHandler):
         if not update_document_description(payload["id"], payload["description_md"]):
             raise ValueError("Không tìm thấy file trong thư viện")
         self.respond_json(200, {"ok": True})
+
+    def post_document_match_auto(self, url):
+        payload = json.loads(self.read_body(65536))
+        self.respond_json(200, auto_compare_requirement(payload.get("title"), payload.get("detail", "")))
 
     def post_document_match(self, url):
         payload = json.loads(self.read_body(65536))

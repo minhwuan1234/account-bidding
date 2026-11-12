@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 
 from business.llm_tag_match import MODEL, openai_request, _response_text
 from database.library_store import list_files
@@ -73,3 +74,39 @@ def compare_requirement(title, detail, file_ids):
              for value in requirements]
     return {'items':items, 'incomplete':False, 'basis':'checklist',
             'checklist_revisions':{source['id']: source['revision'] for source in sources}}
+
+
+def find_relevant_files(title):
+    """Find candidates by filename only; unknown names are left for manual selection."""
+    def tokens(value):
+        text = unicodedata.normalize("NFKD", value.casefold().replace("đ", "d"))
+        text = "".join(c for c in text if not unicodedata.combining(c))
+        return set(re.findall(r"[a-z0-9]+", text))
+    stop = {"file", "pdf", "docx", "ho", "so", "tai", "lieu", "cua", "va", "the", "of", "and", "for", "company", "cong", "ty", "document"}
+    wanted = tokens(title) - stop
+    matches = []
+    for file in list_files():
+        actual = tokens(file["filename"].rsplit(".", 1)[0]) - stop
+        common = wanted & actual
+        strong = {word for word in common if len(word) >= 4 or word == "cv"}
+        if not strong:
+            continue
+        score = len(strong)
+        matches.append((score, file))
+    matches.sort(key=lambda pair: -pair[0])
+    return [file for _, file in matches[:10]]
+
+
+def auto_compare_requirement(title, detail):
+    if not isinstance(title, str) or not title.strip() or not isinstance(detail, str):
+        raise ValueError("Thiếu yêu cầu hồ sơ")
+    candidates = find_relevant_files(title)
+    ids = [file["id"] for file in candidates]
+    if not ids:
+        return {"file_ids": [], "result": None, "message": "Chưa tìm thấy file liên quan theo tên; bạn có thể chọn thủ công."}
+    ready = [file_id for file_id in ids if get_checklist(file_id)]
+    if not ready:
+        return {"file_ids": ids, "result": None, "message": "Các file liên quan chưa có checklist; hãy bổ sung trong thư viện."}
+    result = compare_requirement(title, detail, ready)
+    result["incomplete"] = len(ready) != len(ids)
+    return {"file_ids": ids, "result": result, "message": "Một số file chưa có checklist." if result["incomplete"] else ""}
