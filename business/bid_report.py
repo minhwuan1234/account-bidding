@@ -114,7 +114,8 @@ SOW_PROMPTS = {
     ),
     "arrangement": (
         "Hình thức: xác định loại hợp đồng hoặc cơ chế mua sắm, ví dụ LTA, hợp đồng theo dự án, "
-        "thỏa thuận khung. Chỉ nêu điều khoản cốt lõi được ghi rõ. Không nhầm với cách gửi hồ sơ dự thầu."
+        "thỏa thuận khung. Chỉ nêu điều khoản cốt lõi được ghi rõ. Trình bày mỗi ý thành một dòng riêng bắt đầu bằng - , "
+        "không lặp ý và không viết thành một đoạn dài. Không nhầm với cách gửi hồ sơ dự thầu."
     ),
     "content_provider": (
         "Ai cung cấp nội dung chuyên môn: tìm bên cung cấp kiến thức, dữ liệu, tài liệu nguồn hoặc nội dung "
