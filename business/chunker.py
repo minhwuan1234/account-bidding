@@ -29,6 +29,10 @@ class Block:
     page: int | None = None
     level: int | None = None
     rows: list[list[str]] | None = None
+    table_index: int | None = None
+    row_start: int | None = None
+    row_end: int | None = None
+    repeated_first_row: bool = False
 
 
 def numbered_level(text: str) -> int | None:
@@ -148,6 +152,35 @@ def pdf_blocks(path: Path) -> list[Block]:
     return blocks
 
 
+def split_table(block: Block, table_index: int, max_rows: int = 12, max_chars: int = 2000) -> list[Block]:
+    """Keep rows intact; repeat the first row as context, without assuming it is a header."""
+    rows = block.rows or []
+    if not rows:
+        return [block]
+    if len(rows) == 1:
+        return [Block("table", block.text, block.page, rows=rows, table_index=table_index, row_start=1, row_end=1)]
+    first, result, group = rows[0], [], []
+    def emit():
+        if not group:
+            return
+        start = group[0][0]
+        selected = [first] + [row for _, row in group]
+        result.append(Block("table", "\n".join(" | ".join(row) for row in selected), block.page,
+                            rows=selected, table_index=table_index, row_start=start,
+                            row_end=group[-1][0], repeated_first_row=start > 2))
+    current_chars = len(" | ".join(first))
+    for index, row in enumerate(rows[1:], 2):
+        row_chars = len(" | ".join(row)) + 1
+        if group and (len(group) >= max_rows or current_chars + row_chars > max_chars):
+            emit()
+            group = []
+            current_chars = len(" | ".join(first))
+        group.append((index, row))
+        current_chars += row_chars
+    emit()
+    return result
+
+
 def make_chunks(blocks: list[Block], filename: str) -> list[dict[str, Any]]:
     chunks: list[dict[str, Any]] = []
     headings: list[tuple[int, str]] = []
@@ -171,6 +204,7 @@ def make_chunks(blocks: list[Block], filename: str) -> list[dict[str, Any]]:
         })
         current = []
 
+    table_index = 0
     for block in blocks:
         if block.kind == "heading":
             flush()
@@ -181,6 +215,12 @@ def make_chunks(blocks: list[Block], filename: str) -> list[dict[str, Any]]:
             # email) even when another heading follows immediately. Preserve it
             # as source content as well as in the section path.
             current.append(block)
+        elif block.kind == "table":
+            flush()
+            table_index += 1
+            for part in split_table(block, table_index):
+                current.append(part)
+                flush()
         else:
             current.append(block)
     flush()
